@@ -1,0 +1,1826 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+    <meta name="theme-color" content="#0b3723">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Подкидной Дурак">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <link rel="icon" href="./icon-192.png" sizes="192x192">
+    <title>Подкидной Дурак · MCTS+NN</title>
+    <script src="./js/tf.min.js"></script>
+    <style>
+        :root {
+            --cw: 80px;
+            --ch: 114px
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden
+        }
+
+        body {
+            background: #071b12;
+            font-family: 'Rubik','Segoe UI',system-ui,sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none
+        }
+
+        #felt {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: radial-gradient(125% 95% at 50% 30%,#2f8f63 0%,#1e6b47 46%,#124b31 76%,#0a3522 100%)
+        }
+
+            #felt::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                opacity: .14;
+                mix-blend-mode: overlay;
+                background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.6'/></svg>")
+            }
+
+            #felt::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: radial-gradient(90% 80% at 50% 45%,transparent 55%,rgba(0,0,0,.5) 100%)
+            }
+
+        #sheen {
+            position: fixed;
+            inset: -40%;
+            z-index: 1;
+            pointer-events: none;
+            background: linear-gradient(115deg,transparent 42%,rgba(255,255,255,.055) 50%,transparent 58%);
+            animation: sheen 10s ease-in-out infinite
+        }
+
+        @keyframes sheen {
+            0%,100% {
+                transform: translateX(-16%)
+            }
+
+            50% {
+                transform: translateX(16%)
+            }
+        }
+
+        #frame {
+            position: fixed;
+            inset: 8px;
+            z-index: 2;
+            pointer-events: none;
+            border: 1px solid rgba(240,215,140,.3);
+            border-radius: 22px
+        }
+
+            #frame::after {
+                content: '';
+                position: absolute;
+                inset: 5px;
+                border: 1px solid rgba(240,215,140,.13);
+                border-radius: 17px
+            }
+
+        .sideglow {
+            position: fixed;
+            left: 10px;
+            right: 10px;
+            height: 5px;
+            border-radius: 3px;
+            z-index: 55;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .5s
+        }
+
+        #glowTop {
+            top: 7px;
+            background: linear-gradient(90deg,transparent,#ffd873,transparent)
+        }
+
+        #glowBot {
+            bottom: 7px;
+            background: linear-gradient(90deg,transparent,#ffd873,transparent)
+        }
+
+        body.humanAtk #glowBot {
+            opacity: .9;
+            animation: gp 1.8s ease-in-out infinite
+        }
+
+        body.aiAtk #glowTop {
+            opacity: .9;
+            animation: gp 1.8s ease-in-out infinite
+        }
+
+        @keyframes gp {
+            50% {
+                opacity: .3
+            }
+        }
+
+        #topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 44px;
+            z-index: 60;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 14px;
+            pointer-events: none;
+            background: linear-gradient(rgba(4,16,10,.65),transparent)
+        }
+
+        #logo {
+            font: 900 13px Rubik,sans-serif;
+            color: #f0dfae;
+            letter-spacing: .12em;
+            pointer-events: auto;
+            white-space: nowrap
+        }
+
+            #logo .s1 {
+                color: #ff6b6b
+            }
+
+            #logo .s2 {
+                color: #e9e9f2
+            }
+
+        @media(max-width:640px) {
+            #logo .txt {
+                display: none
+            }
+        }
+
+        #tools {
+            display: flex;
+            gap: 8px;
+            pointer-events: auto
+        }
+
+        .tbtn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid rgba(240,215,140,.4);
+            background: rgba(6,24,15,.55);
+            color: #f0dfae;
+            font: 700 15px Rubik;
+            cursor: pointer;
+            transition: .15s
+        }
+
+            .tbtn:hover {
+                background: rgba(240,215,140,.18)
+            }
+
+            .tbtn.off {
+                opacity: .45
+            }
+
+            .tbtn.active {
+                background: rgba(240,215,140,.25);
+                border-color: #ffd873
+            }
+
+        #score {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%,-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(6,24,15,.6);
+            border: 1px solid rgba(240,215,140,.4);
+            border-radius: 999px;
+            padding: 4px 14px;
+            font: 800 13px Rubik;
+            color: #f0dfae;
+            pointer-events: auto;
+            cursor: pointer;
+            white-space: nowrap
+        }
+
+            #score b {
+                font-size: 15px;
+                color: #ffd873;
+                min-width: 12px;
+                text-align: center
+            }
+
+            #score .sc-l {
+                font: 600 10px Rubik;
+                letter-spacing: .06em;
+                color: #bfe0c8;
+                text-transform: uppercase
+            }
+
+            #score .sep {
+                color: #bfe0c8
+            }
+
+            #score.flash {
+                animation: scoreFlash .6s
+            }
+
+        @keyframes scoreFlash {
+            30% {
+                transform: translate(-50%,-50%) scale(1.3)
+            }
+        }
+
+        #board {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none
+        }
+
+        #cards {
+            position: absolute;
+            inset: 0
+        }
+
+        .card {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--cw);
+            height: var(--ch);
+            opacity: 0;
+            z-index: 10;
+            pointer-events: none;
+            perspective: 700px;
+            will-change: transform;
+            transition: transform .5s cubic-bezier(.25,.9,.3,1.04),opacity .3s
+        }
+
+            .card.noanim {
+                transition: none
+            }
+
+            .card.mine {
+                pointer-events: auto;
+                cursor: pointer
+            }
+
+            .card.selected .lift {
+                transform: translateY(-26px)
+            }
+
+            .card.canBeat .front {
+                box-shadow: 0 0 0 2px rgba(140,225,175,.55),0 4px 10px rgba(0,0,0,.35)
+            }
+
+            .card.selected .front {
+                box-shadow: 0 0 0 3px #ffd873,0 0 20px 3px rgba(255,216,115,.65)
+            }
+
+            .card.bad .lift {
+                animation: shake .4s
+            }
+
+        @keyframes shake {
+            20% {
+                transform: translateX(-6px)
+            }
+
+            40% {
+                transform: translateX(6px)
+            }
+
+            60% {
+                transform: translateX(-4px)
+            }
+
+            80% {
+                transform: translateX(3px)
+            }
+        }
+
+        .card.tr::after {
+            content: '⇄';
+            position: absolute;
+            top: -9px;
+            right: -7px;
+            z-index: 5;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #ffd873;
+            color: #3a2b07;
+            font: 800 13px Rubik,sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,.4)
+        }
+
+        .lift {
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform .16s ease
+        }
+
+        @media(hover:hover) {
+            .card.mine:hover .lift {
+                transform: translateY(-14px)
+            }
+        }
+
+        .inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform .4s
+        }
+
+        .card.up .inner {
+            transform: rotateY(180deg)
+        }
+
+        .face {
+            position: absolute;
+            inset: 0;
+            border-radius: calc(var(--cw)*0.11);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,.35)
+        }
+
+        .front {
+            transform: rotateY(180deg);
+            background: linear-gradient(160deg,#fffdf5,#efe7d0);
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+            .front::after {
+                content: '';
+                position: absolute;
+                inset: 4%;
+                border: 1px solid rgba(0,0,0,.08);
+                border-radius: calc(var(--cw)*0.07)
+            }
+
+        .back {
+            background: radial-gradient(circle at 50% 42%,#8c2a40,#571526 80%);
+            border: 2px solid #ecd7a0
+        }
+
+            .back::before {
+                content: '';
+                position: absolute;
+                inset: 7%;
+                border-radius: calc(var(--cw)*0.06);
+                border: 1.5px solid rgba(236,215,160,.7);
+                background: repeating-linear-gradient(45deg,rgba(236,215,160,.16) 0 2px,transparent 2px 6px),repeating-linear-gradient(-45deg,rgba(236,215,160,.16) 0 2px,transparent 2px 6px)
+            }
+
+            .back::after {
+                content: '♛';
+                position: absolute;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: rgba(236,215,160,.9);
+                font-size: calc(var(--cw)*0.4);
+                text-shadow: 0 2px 4px rgba(0,0,0,.4)
+            }
+
+        .card.red {
+            color: #c22f38
+        }
+
+        .card.black {
+            color: #232735
+        }
+
+        .ci {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: .95;
+            font-weight: 800
+        }
+
+            .ci b {
+                font-weight: 800;
+                font-size: calc(var(--cw)*0.26)
+            }
+
+            .ci i {
+                font-style: normal;
+                font-size: calc(var(--cw)*0.22)
+            }
+
+        .tl {
+            top: 5%;
+            left: 7%
+        }
+
+        .br {
+            bottom: 5%;
+            right: 7%;
+            transform: rotate(180deg)
+        }
+
+        .mid {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1
+        }
+
+        .pip {
+            font-size: calc(var(--cw)*0.6)
+        }
+
+        .court {
+            font-weight: 800;
+            font-size: calc(var(--cw)*0.44)
+        }
+
+        .pipsm {
+            font-size: calc(var(--cw)*0.28);
+            margin-top: -2px
+        }
+
+        #deckStack {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--cw);
+            height: var(--ch);
+            z-index: 6;
+            display: none;
+            border-radius: calc(var(--cw)*0.11);
+            background: radial-gradient(circle at 50% 45%,#8a2b3d,#55131f 78%);
+            border: 2px solid #e9d39a;
+            box-shadow: 2px 3px 0 -1px #f5eeda,2px 3px 0 0 #8d7f5c,5px 6px 0 -1px #f5eeda,5px 6px 0 0 #8d7f5c,8px 10px 18px rgba(0,0,0,.45)
+        }
+
+            #deckStack::before {
+                content: '';
+                position: absolute;
+                inset: 7%;
+                border-radius: calc(var(--cw)*0.06);
+                border: 1.5px solid rgba(233,211,154,.7);
+                background: repeating-linear-gradient(45deg,rgba(233,211,154,.14) 0 2px,transparent 2px 6px),repeating-linear-gradient(-45deg,rgba(233,211,154,.14) 0 2px,transparent 2px 6px)
+            }
+
+        #deckCount {
+            position: absolute;
+            right: -9px;
+            bottom: -9px;
+            min-width: 26px;
+            height: 26px;
+            padding: 0 6px;
+            border-radius: 13px;
+            background: linear-gradient(#f0d68a,#c99b3f);
+            color: #33250a;
+            font: 800 13px Rubik;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 6px rgba(0,0,0,.4)
+        }
+
+        .chip {
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 6;
+            background: rgba(5,22,14,.7);
+            border: 1px solid rgba(240,215,140,.45);
+            color: #efe3bd;
+            font: 600 13px Rubik;
+            padding: 5px 12px;
+            border-radius: 999px;
+            display: flex;
+            gap: 7px;
+            align-items: center;
+            white-space: nowrap
+        }
+
+            .chip b {
+                font-size: 18px;
+                line-height: 1;
+                font-weight: 800
+            }
+
+        .red-t {
+            color: #ff6b6b
+        }
+
+        .blk-t {
+            color: #e9e9f2
+        }
+
+        #bitaWrap {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--cw);
+            height: var(--ch);
+            z-index: 6
+        }
+
+        #bitaBadge {
+            position: absolute;
+            right: -9px;
+            bottom: -9px;
+            min-width: 26px;
+            height: 26px;
+            padding: 0 6px;
+            border-radius: 13px;
+            background: linear-gradient(#bcd9c3,#7fa98c);
+            color: #12301f;
+            font: 800 13px Rubik;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 6px rgba(0,0,0,.4)
+        }
+
+        .pileLbl {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            text-align: center;
+            font: 600 10px Rubik;
+            color: rgba(240,215,140,.6);
+            letter-spacing: .1em;
+            text-transform: uppercase
+        }
+
+        #console {
+            position: fixed;
+            left: 0;
+            right: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none
+        }
+
+        #msg {
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font: 600 clamp(12px,2.9vw,15px) Rubik,sans-serif;
+            color: #f6ecc9;
+            background: rgba(6,24,15,.55);
+            border: 1px solid rgba(240,215,140,.3);
+            padding: 7px 18px;
+            border-radius: 999px;
+            max-width: 92vw;
+            text-align: center
+        }
+
+        #btns {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center
+        }
+
+            #btns button {
+                pointer-events: auto;
+                font: 800 15px Rubik,sans-serif;
+                letter-spacing: .06em;
+                border-radius: 16px;
+                padding: 13px 26px;
+                border: 0;
+                cursor: pointer;
+                transition: transform .08s,box-shadow .08s
+            }
+
+        #bitoBtn {
+            background: linear-gradient(#f4dc94,#cf9f42);
+            color: #3c2a06;
+            box-shadow: 0 5px 0 #8a6420
+        }
+
+        #takeBtn {
+            background: linear-gradient(#e2604f,#a72c23);
+            color: #fff3ea;
+            box-shadow: 0 5px 0 #66150f
+        }
+
+        #beatBtn {
+            background: linear-gradient(#8ec7ea,#2f7fae);
+            color: #06222f;
+            box-shadow: 0 5px 0 #1d5577
+        }
+
+        #transferBtn {
+            background: linear-gradient(#8fdcb2,#3f9e6f);
+            color: #0c2e1d;
+            box-shadow: 0 5px 0 #23603f
+        }
+
+        #doneBtn {
+            background: linear-gradient(#f4dc94,#cf9f42);
+            color: #3c2a06;
+            box-shadow: 0 5px 0 #8a6420
+        }
+
+        #btns button:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 rgba(0,0,0,.4)
+        }
+
+        #toast {
+            position: fixed;
+            top: 54px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 70;
+            font: 800 16px Rubik,sans-serif;
+            color: #ffd873;
+            opacity: 0;
+            transition: .25s;
+            pointer-events: none;
+            white-space: nowrap
+        }
+
+            #toast.in {
+                opacity: 1
+            }
+
+        .ov {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(4,14,9,.8);
+            opacity: 0;
+            pointer-events: none;
+            transition: .35s;
+            padding: 18px
+        }
+
+            .ov.show {
+                opacity: 1;
+                pointer-events: auto
+            }
+
+        .ovbox {
+            position: relative;
+            background: linear-gradient(170deg,#10422d,#0a2b1d);
+            border: 2px solid rgba(240,214,138,.5);
+            border-radius: 20px;
+            padding: 30px 26px;
+            max-width: min(440px,94vw);
+            max-height: 92vh;
+            overflow: auto;
+            text-align: center
+        }
+
+            .ovbox h1 {
+                font: 900 clamp(26px,6.5vw,42px) Rubik,sans-serif;
+                color: #f0d68a;
+                margin-bottom: 8px
+            }
+
+            .ovbox h2 {
+                font: 800 22px Rubik,sans-serif;
+                color: #f0d68a;
+                margin-bottom: 14px
+            }
+
+        .tag {
+            color: #bfe0c8;
+            font-size: 14px;
+            margin-bottom: 16px
+        }
+
+        .ovbox ul {
+            text-align: left;
+            color: #d8ecd9;
+            font-size: 14px;
+            line-height: 1.5;
+            list-style: none;
+            margin: 0 0 20px
+        }
+
+            .ovbox ul li {
+                padding: 5px 0 5px 24px;
+                position: relative
+            }
+
+                .ovbox ul li::before {
+                    content: '♦';
+                    position: absolute;
+                    left: 2px;
+                    color: #e2604f
+                }
+
+        .bigbtn {
+            font: 900 17px Rubik,sans-serif;
+            border: 0;
+            border-radius: 16px;
+            padding: 15px 42px;
+            cursor: pointer;
+            background: linear-gradient(#f4dc94,#cf9f42);
+            color: #3c2a06;
+            box-shadow: 0 6px 0 #8a6420;
+            transition: transform .08s
+        }
+
+            .bigbtn:active {
+                transform: translateY(4px)
+            }
+
+        .fan {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px
+        }
+
+        .mcard {
+            width: 70px;
+            height: 100px;
+            margin: 0 -10px;
+            border-radius: 10px;
+            background: linear-gradient(165deg,#fffdf4,#eee5cc);
+            border: 1px solid #cfc3a0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 24px rgba(0,0,0,.5);
+            animation: bob 3.6s ease-in-out infinite
+        }
+
+        @keyframes bob {
+            50% {
+                transform: translateY(-7px)
+            }
+        }
+
+        .mcard b {
+            font: 900 30px Rubik,sans-serif;
+            line-height: 1
+        }
+
+        .mcard i {
+            font-style: normal;
+            font-size: 26px
+        }
+
+        .mcard.red {
+            color: #c22f38
+        }
+
+        .mcard.blk {
+            color: #232735
+        }
+
+        #roundInfo {
+            position: fixed;
+            bottom: 8px;
+            left: 8px;
+            z-index: 55;
+            display: flex;
+            gap: 8px;
+            pointer-events: none
+        }
+
+        .info-chip {
+            background: rgba(6,24,15,.7);
+            border: 1px solid rgba(240,215,140,.3);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font: 600 11px Rubik;
+            color: #bfe0c8
+        }
+
+            .info-chip b {
+                color: #ffd873;
+                font-size: 13px
+            }
+
+        .cf {
+            position: absolute;
+            top: -44px;
+            z-index: 1;
+            pointer-events: none;
+            animation: fall linear forwards
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(115vh) rotate(320deg);
+                opacity: .6
+            }
+        }
+
+        #nnPanel {
+            position: fixed;
+            right: 10px;
+            top: 54px;
+            z-index: 80;
+            background: rgba(6,24,15,.95);
+            border: 1px solid rgba(240,215,140,.3);
+            border-radius: 14px;
+            padding: 12px;
+            width: 270px;
+            font: 500 12px Rubik,sans-serif;
+            color: #efe3bd;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            max-height: calc(100vh - 70px);
+            overflow-y: auto;
+            transition: transform .3s,opacity .3s;
+            transform: translateX(0)
+        }
+
+            #nnPanel.hidden {
+                transform: translateX(300px);
+                opacity: 0;
+                pointer-events: none
+            }
+
+            #nnPanel::-webkit-scrollbar {
+                width: 4px
+            }
+
+            #nnPanel::-webkit-scrollbar-thumb {
+                background: rgba(240,215,140,.3);
+                border-radius: 2px
+            }
+
+            #nnPanel h3 {
+                font: 800 12px Rubik,sans-serif;
+                color: #ffd873;
+                margin: 0
+            }
+
+        .nn-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 1px 0
+        }
+
+            .nn-row b {
+                color: #ffd873;
+                font-size: 11px
+            }
+
+            .nn-row small {
+                color: #bfe0c8;
+                font-size: 10px
+            }
+
+        .nn-section {
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed rgba(240,215,140,.15)
+        }
+
+            .nn-section h4 {
+                font: 700 10px Rubik;
+                color: #bfe0c8;
+                margin: 0 0 3px;
+                text-transform: uppercase;
+                letter-spacing: .05em
+            }
+
+        #thinkInd {
+            font-size: 10px;
+            color: #bfe0c8;
+            min-height: 12px
+        }
+
+        .nn-btn {
+            font: 700 11px Rubik,sans-serif;
+            border: 1px solid rgba(240,215,140,.4);
+            border-radius: 7px;
+            padding: 5px 7px;
+            background: rgba(0,0,0,.3);
+            color: #efe3bd;
+            cursor: pointer;
+            transition: .15s;
+            text-align: center
+        }
+
+            .nn-btn:hover {
+                background: rgba(240,215,140,.15);
+                color: #ffd873
+            }
+
+            .nn-btn.active {
+                background: rgba(240,215,140,.2);
+                border-color: #ffd873;
+                color: #ffd873
+            }
+
+            .nn-btn.danger {
+                border-color: rgba(226,96,79,.5);
+                color: #e2604f
+            }
+
+                .nn-btn.danger:hover {
+                    background: rgba(226,96,79,.2)
+                }
+
+            .nn-btn.continuous {
+                border-color: rgba(63,158,111,.6);
+                color: #8fdcb2
+            }
+
+                .nn-btn.continuous.active {
+                    background: rgba(63,158,111,.25);
+                    border-color: #3f9e6f;
+                    color: #8fdcb2
+                }
+
+        .nn-btn-row {
+            display: flex;
+            gap: 3px
+        }
+
+            .nn-btn-row .nn-btn {
+                flex: 1
+            }
+
+        .match-box {
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed rgba(240,215,140,.15)
+        }
+
+        .match-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+            padding: 1px 0
+        }
+
+            .match-row b {
+                color: #ffd873;
+                font-size: 12px
+            }
+
+            .match-row small {
+                color: #bfe0c8;
+                font-size: 10px
+            }
+
+        #resetMatchBtn {
+            font: 700 9px Rubik,sans-serif;
+            border: 1px solid rgba(240,215,140,.4);
+            border-radius: 5px;
+            padding: 3px 6px;
+            background: rgba(0,0,0,.3);
+            color: #efe3bd;
+            cursor: pointer
+        }
+
+        #trainLog {
+            max-height: 90px;
+            overflow-y: auto;
+            font-size: 9px;
+            color: #8ab89a;
+            margin-top: 3px;
+            border-top: 1px dashed rgba(240,215,140,.15);
+            padding-top: 2px;
+            line-height: 1.3
+        }
+
+            #trainLog div {
+                padding: 0 0 1px
+            }
+
+        .auto-train-lbl {
+            font-size: 10px;
+            color: #bfe0c8;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer
+        }
+
+            .auto-train-lbl input {
+                accent-color: #ffd873;
+                width: 11px;
+                height: 11px
+            }
+
+        #spectateInfo {
+            font-size: 10px;
+            color: #ffd873;
+            min-height: 12px;
+            text-align: center
+        }
+
+        #qualityBar {
+            height: 5px;
+            border-radius: 3px;
+            background: rgba(0,0,0,.4);
+            margin-top: 1px;
+            overflow: hidden
+        }
+
+        #qualityFill {
+            height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg,#e2604f,#ffd873,#3f9e6f);
+            width: 0%;
+            transition: width .5s
+        }
+
+        #lossChart {
+            display: flex;
+            align-items: flex-end;
+            gap: 1px;
+            height: 24px;
+            margin-top: 2px;
+            padding: 2px;
+            background: rgba(0,0,0,.2);
+            border-radius: 4px
+        }
+
+            #lossChart .bar {
+                flex: 1;
+                min-width: 2px;
+                background: #ffd873;
+                border-radius: 1px 1px 0 0;
+                transition: height .3s
+            }
+
+        #contStats {
+            font-size: 10px;
+            color: #8fdcb2;
+            min-height: 12px;
+            text-align: center
+        }
+
+        #importFileInput {
+            display: none
+        }
+
+        @media(max-width:700px) {
+            #nnPanel {
+                right: 6px;
+                top: 50px;
+                width: 210px;
+                padding: 8px
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="felt"></div><div id="sheen"></div><div id="frame"></div>
+    <div id="glowTop" class="sideglow"></div><div id="glowBot" class="sideglow"></div>
+    <div id="board"><div id="cards"></div><div id="deckStack"><span id="deckCount">36</span></div><div id="trumpTag" class="chip">Козырь <b id="trumpSym">♠</b></div><div id="bitaWrap"><span id="bitaBadge">0</span><span class="pileLbl">Бита</span></div></div>
+    <div id="topbar"><div id="logo"><span class="s1">♥</span><span class="s2">♠</span><span class="txt"> ПОДКИДНОЙ ДУРАК · MCTS+NN</span></div><div id="score"><span class="sc-l">Вы</span><b id="scoreH">0</b><span class="sep">:</span><b id="scoreA">0</b><span class="sc-l">ИИ</span></div><div id="tools"><button class="tbtn" id="menuBtn" title="Панель обучения">🧠</button><button class="tbtn" id="sndBtn">♪</button><button class="tbtn" id="helpBtn">?</button><button class="tbtn" id="newBtn">⟳</button></div></div>
+    <div id="nnPanel" class="hidden">
+        <h3>🧠 MCTS + Нейросеть</h3>
+        <div class="nn-row"><small>Статус</small><b id="nnStatus">загрузка...</b></div>
+        <div class="nn-row"><small>Параметры</small><b id="nnParams">—</b></div>
+        <div class="nn-row"><small>Loss (последний)</small><b id="nnLoss">—</b></div>
+        <div class="nn-row"><small>Loss (средний)</small><b id="nnLossAvg">—</b></div>
+        <div id="lossChart"></div>
+        <div class="nn-row"><small>Качество</small><b id="nnQuality">—</b></div>
+        <div id="qualityBar"><div id="qualityFill"></div></div>
+        <div class="nn-row"><small>Позиций обучено</small><b id="nnGames">0</b></div>
+        <div class="nn-row"><small>Буфер</small><b id="bufferSize">0</b></div>
+        <div id="thinkInd"></div>
+        <div id="spectateInfo"></div>
+        <div id="contStats"></div>
+        <div class="nn-section">
+            <h4>Обучение</h4>
+            <button class="nn-btn continuous" id="contTrainBtn">▶ Непрерывное обучение</button>
+            <div class="nn-btn-row" style="margin-top:3px">
+                <button class="nn-btn" id="spectateBtn">👁 Наблюдать</button>
+                <button class="nn-btn" id="trainNowBtn">📊 Буфер</button>
+            </div>
+            <label class="auto-train-lbl" style="margin-top:3px"><input type="checkbox" id="autoTrainChk" checked> Автообучение после игр</label>
+        </div>
+        <div class="nn-section">
+            <h4>Модель</h4>
+            <div class="nn-btn-row">
+                <button class="nn-btn" id="saveModelBtn" title="Сохранить">💾</button>
+                <button class="nn-btn" id="loadModelBtn" title="Загрузить">📂</button>
+                <button class="nn-btn" id="exportModelBtn" title="Экспорт">📤</button>
+                <button class="nn-btn" id="importModelBtn" title="Импорт">📥</button>
+                <button class="nn-btn danger" id="resetModelBtn" title="Сбросить">🗑</button>
+            </div>
+            <input type="file" id="importFileInput" accept=".json">
+        </div>
+        <div class="match-box">
+            <div class="match-row"><small>Вы</small><b id="matchH">0</b><small>ИИ</small><b id="matchA">0</b><button id="resetMatchBtn">СБРОС</button></div>
+        </div>
+        <div id="trainLog"></div>
+    </div>
+    <div id="console">
+        <div id="msg">…</div><div id="btns">
+            <button id="beatBtn" style="display:none">ПОБИТЬ</button>
+            <button id="transferBtn" style="display:none">ПЕРЕВЕСТИ ⇄</button>
+            <button id="bitoBtn" style="display:none">БИТО</button>
+            <button id="takeBtn" style="display:none">БЕРУ</button>
+            <button id="doneBtn" style="display:none">ГОТОВО ✓</button>
+        </div>
+    </div>
+    <div id="toast"></div>
+    <div id="roundInfo"><div class="info-chip">Карты: Вы <b id="cardsH">0</b> : <b id="cardsA">0</b> ИИ</div><div class="info-chip">Бита: <b id="bitaCount">0</b></div></div>
+    <div id="start" class="ov show">
+        <div class="ovbox">
+            <div class="fan"><div class="mcard red"><b>Т</b><i>♥</i></div><div class="mcard blk"><b>К</b><i>♠</i></div><div class="mcard red"><b>Д</b><i>♦</i></div></div>
+            <h1>ПОДКИДНОЙ ДУРАК</h1><p class="tag">Против MCTS+NN · Self-play обучение</p><ul><li>Клик по карте — автоматически бьёт (или переводит ⇄)</li><li>Подкидывайте карты тех достоинств, что на столе</li><li>Нейросеть обучается через self-play, ваши игры и «Наблюдать»</li><li>Кто остался с картами — тот дурак</li></ul><button class="bigbtn" id="playBtn">ИГРАТЬ</button>
+        </div>
+    </div>
+    <div id="help" class="ov"><div class="ovbox"><h2>Правила</h2><ul><li>36 карт, по 6 на руку</li><li>Защита: клик по карте — она бьёт автоматически</li><li>Если картой можно перевести — значок ⇄ и автоперевод</li><li>Если можно и побить, и перевести — выбор кнопками</li><li>Подкидывать можно карты тех достоинств, что на столе</li><li>Не отбился — забираешь все карты со стола (БЕРУ)</li><li>Бито — все атаки отбиты, карты в отбой</li><li>Кто остался с картами когда колода пуста — дурак</li></ul><button class="bigbtn" id="helpClose">ПОНЯТНО</button></div></div>
+    <div id="gameEnd" class="ov"><div class="ovbox"><h1 id="geTitle"></h1><p id="geDetail" class="tag"></p><p id="geFinal" style="color:#ffd873;font-size:16px;margin-bottom:22px"></p><button class="bigbtn" id="geNewBtn">НОВАЯ ИГРА</button></div></div>
+    <script>
+        'use strict';
+        const $ = s => document.querySelector(s);
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        const rnd = n => Math.floor(Math.random() * n);
+        const SUITS = ['♠', '♥', '♦', '♣'];
+        const RANK_DISPLAY = { 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'В', 12: 'Д', 13: 'К', 14: 'Т' };
+        const isRedSuit = s => s === 1 || s === 2;
+        const clone = o => JSON.parse(JSON.stringify(o));
+        const cardToId = c => c.suit * 9 + (c.rank - 6);
+        const idSuit = id => Math.floor(id / 9);
+        const idRank = id => id % 9 + 6;
+        function canBeatId(a, d, tr) { if (idSuit(d) === idSuit(a)) return idRank(d) > idRank(a); return idSuit(d) === tr && idSuit(a) !== tr; }
+        function rmId(arr, id) { if (!Array.isArray(arr)) return; const i = arr.indexOf(id); if (i >= 0) arr.splice(i, 1); }
+        const other = s => s === 'human' ? 'ai' : 'human';
+
+        /* ===== NN ===== */
+        let NN = null, NN_READY = false, NN_GAMES = 0;
+        const NN_STATE_SIZE = 172, NN_ACTIONS = 12, MODEL_KEY = 'durak-mcts-nn-v1';
+        let LOSS_HISTORY = []; const LOSS_HISTORY_MAX = 20;
+        function addLoss(l) { LOSS_HISTORY.push(l); if (LOSS_HISTORY.length > LOSS_HISTORY_MAX) LOSS_HISTORY.shift(); updateLossDisplay(); }
+        function getAvgLoss() { if (!LOSS_HISTORY.length) return null; const r = LOSS_HISTORY.slice(-10); return r.reduce((a, b) => a + b, 0) / r.length; }
+        function updateLossDisplay() { $('#nnLossAvg').textContent = getAvgLoss() !== null ? getAvgLoss().toFixed(3) : '—'; updateQualityDisplay(getAvgLoss()); const c = $('#lossChart'); c.innerHTML = ''; const mx = Math.max(...LOSS_HISTORY, 4); for (const l of LOSS_HISTORY) { const b = document.createElement('div'); b.className = 'bar'; b.style.height = Math.max(2, Math.round((l / mx) * 22)) + 'px'; b.style.background = l < 2.5 ? '#3f9e6f' : l < 3.1 ? '#ffd873' : '#e2604f'; c.appendChild(b); } }
+        function updateQualityDisplay(loss) { const i = getQualityInfo(loss); $('#nnQuality').textContent = i.text; $('#qualityFill').style.width = i.pct + '%'; }
+        function getQualityInfo(loss) { if (loss === null) return { text: '—', pct: 0 }; if (loss > 3.5) return { text: '🔴 Хаос', pct: 5 }; if (loss > 3.1) return { text: '🔴 Хуже случайного', pct: 10 }; if (loss > 2.8) return { text: '🟡 Случайный', pct: 25 }; if (loss > 2.4) return { text: '🟡 Начало обучения', pct: 40 }; if (loss > 2.0) return { text: '🟢 Учится', pct: 55 }; if (loss > 1.5) return { text: '🟢 Средний', pct: 70 }; if (loss > 1.0) return { text: '🟢 Хороший', pct: 85 }; return { text: '🏆 Отличный', pct: 95 }; }
+        function createModel() { const input = tf.input({ shape: [NN_STATE_SIZE] }); let x = tf.layers.dense({ units: 256, activation: 'relu' }).apply(input); x = tf.layers.dense({ units: 256, activation: 'relu' }).apply(x); x = tf.layers.dense({ units: 128, activation: 'relu' }).apply(x); const p = tf.layers.dense({ units: NN_ACTIONS, activation: 'softmax', name: 'policy' }).apply(x); const v = tf.layers.dense({ units: 1, activation: 'tanh', name: 'value' }).apply(x); const m = tf.model({ inputs: input, outputs: [p, v] }); compileModel(m); return m; }
+        function compileModel(m) { m.compile({ optimizer: tf.train.adam(0.001), loss: { policy: 'categoricalCrossentropy', value: 'meanSquaredError' } }); }
+        function countParams(m) { let c = 0; m.layers.forEach(l => { l.getWeights().forEach(w => { c += w.size; }); }); return c; }
+        async function initNN() {
+            try { await tf.setBackend('webgl'); await tf.ready(); $('#nnStatus').textContent = 'webgl'; } catch (e) { try { await tf.setBackend('cpu'); await tf.ready(); $('#nnStatus').textContent = 'cpu'; } catch (e2) { $('#nnStatus').textContent = 'ошибка'; return; } }
+            let loaded = false;
+            try { const m = await tf.loadLayersModel('localstorage://' + MODEL_KEY); NN = m; compileModel(NN); loaded = true; addTrainLog('📂 Модель загружена'); } catch (e) { NN = createModel(); addTrainLog('Новая модель'); }
+            NN_READY = true; $('#nnParams').textContent = countParams(NN).toLocaleString(); $('#nnStatus').textContent = loaded ? 'загружена ✓' : 'готова ✓'; updateQualityDisplay(null);
+        }
+        async function saveModelToLS() { if (!NN_READY) return; try { await NN.save('localstorage://' + MODEL_KEY); addTrainLog('💾 Сохранено'); toast('Сохранено ✓'); } catch (e) { addTrainLog('❌ Ошибка'); } }
+        async function loadModelFromLS() { if (!NN_READY) return; try { const m = await tf.loadLayersModel('localstorage://' + MODEL_KEY); if (NN) NN.dispose(); NN = m; compileModel(NN); $('#nnParams').textContent = countParams(NN).toLocaleString(); addTrainLog('📂 Загружено'); toast('Загружено ✓'); } catch (e) { toast('Нет модели'); } }
+        async function exportModelSingleFile() { if (!NN_READY) return; try { let sa = null; await NN.save({ save: async a => { sa = a; return { modelArtifactsInfo: { dateSaved: new Date(), modelTopologyType: 'JSON' } }; } }); const wb = new Uint8Array(sa.weightData); let bin = ''; for (let i = 0; i < wb.length; i += 8192)bin += String.fromCharCode.apply(null, wb.subarray(i, i + 8192)); const d = { format: 'durak-mcts-nn-v1', topology: sa.modelTopology, weightSpecs: sa.weightSpecs, weightData: btoa(bin) }; const blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'durak-mcts-nn-model.json'; a.click(); URL.revokeObjectURL(url); addTrainLog('📤 Экспорт'); toast('Экспортировано ✓'); } catch (e) { toast('Ошибка экспорта'); } }
+        async function importModelSingleFile(file) { try { const data = JSON.parse(await file.text()); if (data.format !== 'durak-mcts-nn-v1') { toast('Неверный формат'); return; } const bin = atob(data.weightData); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++)bytes[i] = bin.charCodeAt(i); const model = await tf.loadLayersModel({ load: async () => ({ modelTopology: data.topology, weightSpecs: data.weightSpecs, weightData: bytes.buffer }) }); if (NN) NN.dispose(); NN = model; compileModel(NN); NN_READY = true; $('#nnParams').textContent = countParams(NN).toLocaleString(); addTrainLog('📥 Импорт'); toast('Импортировано ✓'); } catch (e) { toast('Ошибка импорта'); } }
+        function resetModel() { if (!confirm('Сбросить модель?')) return; if (NN) NN.dispose(); NN = createModel(); NN_READY = true; LOSS_HISTORY = []; $('#lossChart').innerHTML = ''; $('#nnParams').textContent = countParams(NN).toLocaleString(); $('#nnLoss').textContent = '—'; $('#nnLossAvg').textContent = '—'; $('#nnQuality').textContent = '—'; $('#qualityFill').style.width = '0%'; try { localStorage.removeItem('tensorflowjs_models/' + MODEL_KEY); } catch (e) { } addTrainLog('🗑 Сброшено'); toast('Сброшено'); }
+        let NN_TRAIN_BUFFER = [];
+        function updateBufferDisplay() { $('#bufferSize').textContent = NN_TRAIN_BUFFER.length; }
+        function addToBuffer(item) { NN_TRAIN_BUFFER.push(item); if (NN_TRAIN_BUFFER.length > 3000) NN_TRAIN_BUFFER.splice(0, NN_TRAIN_BUFFER.length - 3000); updateBufferDisplay(); }
+        async function trainOnBuffer() { if (!NN_READY || NN_TRAIN_BUFFER.length < 10) return null; const batch = NN_TRAIN_BUFFER.slice(-64); const xs = tf.tensor2d(batch.map(b => b.state)); const pY = tf.tensor2d(batch.map(b => b.policy)); const vY = tf.tensor2d(batch.map(b => [b.value])); const r = await NN.fit(xs, [pY, vY], { epochs: 1, verbose: 0 }); NN_GAMES += batch.length; $('#nnGames').textContent = NN_GAMES; const loss = r.history.loss[0]; $('#nnLoss').textContent = loss.toFixed(3); addLoss(loss); xs.dispose(); pY.dispose(); vY.dispose(); return loss; }
+        function addTrainLog(msg) { const log = $('#trainLog'); const t = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); const d = document.createElement('div'); d.textContent = `[${t}] ${msg}`; log.insertBefore(d, log.firstChild); while (log.children.length > 25) log.removeChild(log.lastChild); }
+
+        /* ===== Encoding ===== */
+        function encodeState(side) {
+            if (!G) return new Float32Array(NN_STATE_SIZE);
+            const v = new Float32Array(NN_STATE_SIZE);
+            const opp = other(side);
+            const dS = new Set(G.deck.map(c => c.id)), hA = new Set(G[side].hand.map(c => c.id)), hO = new Set(G[opp].hand.map(c => c.id));
+            const tS = new Set(); G.table.forEach(p => { tS.add(p.attack.id); if (p.defense) tS.add(p.defense.id); });
+            for (let id = 0; id < 36; id++) { const o = id * 4; v[o] = dS.has(id) ? 1 : 0; v[o + 1] = hA.has(id) ? 1 : 0; v[o + 2] = hO.has(id) ? 1 : 0; v[o + 3] = tS.has(id) ? 1 : 0; }
+            let k = 144;
+            for (let s = 0; s < 4; s++)v[k + s] = (s === G.trump) ? 1 : 0; k += 4;
+            v[k++] = G.deck.length / 24; v[k++] = G.bita.length / 36;
+            v[k++] = G[side].hand.length / 6; v[k++] = G[opp].hand.length / 6;
+            v[k++] = G.table.length / 6; v[k++] = uncovered().length / 6;
+            v[k++] = (G.attacker === side) ? 1 : 0; v[k++] = (G.defender === side) ? 1 : 0;
+            v[k++] = (G.phase === 'attack') ? 1 : 0; v[k++] = (G.phase === 'taking') ? 1 : 0;
+            v[k++] = G.firstBout ? 1 : 0; v[k++] = 0;
+            const tr = G[side].hand.filter(c => c.suit === G.trump).length; v[k++] = tr / 6;
+            const trumps = G[side].hand.filter(c => c.suit === G.trump);
+            if (trumps.length) { v[k++] = Math.min(...trumps.map(c => c.rank)) / 14; v[k++] = Math.max(...trumps.map(c => c.rank)) / 14; }
+            else { v[k++] = 0; v[k++] = 0; }
+            while (k < NN_STATE_SIZE) v[k++] = 0;
+            return v;
+        }
+
+        /* ===== MCTS (Monte-Carlo playout) ===== */
+        function pickLow(hand, tr) { if (!hand.length) return null; const nt = hand.filter(id => idSuit(id) !== tr); const pool = nt.length ? nt : hand; return pool.reduce((a, b) => idRank(a) < idRank(b) ? a : b); }
+        function findBeat(hand, a, tr) { if (!Array.isArray(hand) || !hand.length) return null; const cand = hand.filter(id => canBeatId(a, id, tr)); if (!cand.length) return null; const nt = cand.filter(id => idSuit(id) !== tr); const pool = nt.length ? nt : cand; return pool.reduce((x, y) => idRank(x) < idRank(y) ? x : y); }
+        function refillSim(a, h, dk, atk, def) { for (const s of [atk, def]) { const hand = s === 0 ? a : h; while (hand.length < 6 && dk.length) hand.push(dk.pop()); } }
+        function playout(s) {
+            try {
+                let a = Array.isArray(s.a) ? s.a.slice() : [];
+                let h = Array.isArray(s.h) ? s.h.slice() : [];
+                let dk = Array.isArray(s.dk) ? s.dk.slice() : [];
+                let tbl = (s.tbl || []).map(p => ({ a: p.a, d: p.d }));
+                let atk = s.atk ? 1 : 0, def = atk ? 0 : 1, guard = 0;
+                while (guard++ < 600) {
+                    if (dk.length === 0) { if (a.length === 0 && h.length === 0) return 0; if (a.length === 0) return 1; if (h.length === 0) return -1; }
+                    const atkHand = atk === 0 ? a : h, defHand = def === 0 ? a : h;
+                    if (tbl.length === 0) {
+                        if (atkHand.length === 0) { const t = atk; atk = def; def = t; continue; }
+                        const c = pickLow(atkHand, s.trump); if (c == null) { const t = atk; atk = def; def = t; continue; }
+                        rmId(atkHand, c); tbl.push({ a: c, d: null });
+                    } else {
+                        const ranks = new Set(); tbl.forEach(p => { ranks.add(idRank(p.a)); if (p.d) ranks.add(idRank(p.d)); });
+                        const unc = tbl.filter(p => !p.d);
+                        let threw = false;
+                        if (tbl.length < 6 && defHand.length > unc.length && atkHand.length > 0) {
+                            const cand = atkHand.filter(id => ranks.has(idRank(id)));
+                            if (cand.length) { const c = pickLow(cand, s.trump); if (c != null) { rmId(atkHand, c); tbl.push({ a: c, d: null }); threw = true; } }
+                        }
+                        if (!threw) {
+                            const uncov = tbl.filter(p => !p.d); let ok = true;
+                            for (const p of uncov) { const b = findBeat(defHand, p.a, s.trump); if (b == null) { ok = false; break; } rmId(defHand, b); p.d = b; }
+                            if (ok) { tbl = []; const t = atk; atk = def; def = t; }
+                            else { for (const p of tbl) { defHand.push(p.a); if (p.d) defHand.push(p.d); } tbl = []; }
+                            refillSim(a, h, dk, atk, def);
+                        }
+                    }
+                }
+                if (a.length === 0 && h.length > 0) return 1;
+                if (h.length === 0 && a.length > 0) return -1;
+                return 0;
+            } catch (e) { return 0; }
+        }
+        const AI_ITERS = () => SPECTATING ? 14 : 35;
+        function mcEval(s, iters) { try { let sum = 0; for (let i = 0; i < iters; i++)sum += playout(s); return sum / iters; } catch (e) { return 0; } }
+        function idState(side) {
+            const opp = other(side);
+            return { a: G[side].hand.map(cardToId), h: G[opp].hand.map(cardToId), dk: G.deck.map(cardToId), trump: G.trump, tbl: G.table.map(p => ({ a: cardToId(p.attack), d: p.defense ? cardToId(p.defense) : null })), atk: G.attacker === side ? 0 : 1 };
+        }
+
+        /* ===== Layout ===== */
+        const M = { w: 0, h: 0, cw: 80, ch: 114, hdr: 46 };
+        function measure() { M.w = innerWidth; M.h = innerHeight; M.hdr = 46; const raw = Math.min(M.w * .16, M.h * .145); M.cw = Math.round(Math.min(Math.max(raw, 56), 96)); M.ch = Math.round(M.cw * 1.42); document.documentElement.style.setProperty('--cw', M.cw + 'px'); document.documentElement.style.setProperty('--ch', M.ch + 'px'); if (G) layoutAll(); }
+        const deckPos = () => ({ x: 16, y: M.hdr + 16 });
+        const bitaPos = () => ({ x: M.w - M.cw - 16, y: M.hdr + 16 });
+        function tableCY() { return Math.round((M.hdr + 12 + M.ch + M.h - M.ch - 12) / 2 - M.ch / 2); }
+        function tableCX() { return Math.round((M.w - M.cw) / 2); }
+        function placeCard(c, x, y, rot, up, z) { const s = c.el.style; s.transform = `translate(${x}px,${y}px) rotate(${rot || 0}deg)`; if (z !== undefined) s.zIndex = z; if (up !== undefined && up !== c.up) { c.up = up; c.el.classList.toggle('up', up); } }
+        function appearCard(c, x, y) { const el = c.el; el.classList.add('noanim'); el.classList.remove('selected', 'canBeat', 'bad', 'tr'); el.style.opacity = 1; el.style.zIndex = 25; el.style.transform = `translate(${x}px,${y}px) scale(.6)`; c.up = false; el.classList.remove('up'); void el.offsetWidth; el.classList.remove('noanim'); }
+        function handLayout(side) { if (!G) return; const h = G[side].hand, n = h.length; if (!n) return; const base = side === 'human' ? M.h - M.ch - 12 : M.hdr + 10; const maxW = M.w * .96 - M.cw; const sp = n > 1 ? Math.min(M.cw * (side === 'human' ? .7 : .55), maxW / (n - 1)) : 0; const total = sp * (n - 1) + M.cw, x0 = (M.w - total) / 2; const faceUp = SPECTATING ? true : (side === 'human'); h.forEach((c, i) => { const t = n > 1 ? i / (n - 1) - .5 : 0; placeCard(c, x0 + i * sp, side === 'human' ? base - (1 - Math.abs(t * 2)) * 6 : base + (1 - Math.abs(t * 2)) * 5, t * Math.min(16, 3 + n * 1.8) * (side === 'human' ? 1 : -1), faceUp, 30 + i); c.el.classList.toggle('mine', side === 'human' && !G.over && !SPECTATING); }); }
+        function layoutTable() { if (!G || !G.table.length) return; const cx = tableCX(), cy = tableCY(); const n = G.table.length; const sp = M.cw * .85; const x0 = cx - ((sp * (n - 1) + M.cw) / 2 - M.cw / 2); G.table.forEach((p, i) => { placeCard(p.attack, x0 + i * sp, cy - 10, i % 2 ? -3 : 3, true, 20 + i * 2); if (p.defense) placeCard(p.defense, x0 + i * sp, cy + M.ch * .35, i % 2 ? 3 : -3, true, 21 + i * 2); }); }
+        function layoutDeckUI() { if (!G) return; $('#deckStack').style.display = G.deck.length > 1 ? 'block' : 'none'; $('#deckCount').textContent = G.deck.length > 1 ? G.deck.length : 0; }
+        function layoutBitaUI() { if (!G) return; $('#bitaBadge').style.display = G.bita.length ? 'flex' : 'none'; $('#bitaBadge').textContent = G.bita.length; $('#bitaCount').textContent = G.bita.length; }
+        function placeChips() { const dp = deckPos(); $('#deckStack').style.transform = `translate(${dp.x}px,${dp.y}px)`; $('#trumpTag').style.transform = `translate(${dp.x}px,${dp.y + M.ch + 16}px)`; const bp = bitaPos(); $('#bitaWrap').style.transform = `translate(${bp.x}px,${bp.y}px)`; }
+        function layoutAll() { if (!G) return; handLayout('human'); handLayout('ai'); layoutTable(); layoutDeckUI(); layoutBitaUI(); placeChips(); $('#console').style.bottom = (M.ch + 28) + 'px'; $('#cardsH').textContent = G.human.hand.length; $('#cardsA').textContent = G.ai.hand.length; }
+
+        /* ===== Game State ===== */
+        let G = null, AI_T = null, muted = false, toastT = null;
+        const CARDS = new Map();
+        let SCORE = { h: 0, a: 0 }; try { const s = JSON.parse(localStorage.getItem('durakMctsScore')); if (s) SCORE = s; } catch (e) { }
+        function saveScore() { try { localStorage.setItem('durakMctsScore', JSON.stringify(SCORE)); } catch (e) { } }
+        let MATCH = { h: 0, a: 0 }; try { const s = JSON.parse(localStorage.getItem('durakMctsMatch')); if (s) MATCH = s; } catch (e) { }
+        function saveMatch() { try { localStorage.setItem('durakMctsMatch', JSON.stringify(MATCH)); } catch (e) { } }
+        function updMatch() { $('#matchH').textContent = MATCH.h; $('#matchA').textContent = MATCH.a; saveMatch(); }
+        function updScore() { $('#scoreH').textContent = SCORE.h; $('#scoreA').textContent = SCORE.a; saveScore(); }
+
+        /* ===== Audio ===== */
+        let AC = null;
+        function resumeAudio() { try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC && AC.state === 'suspended') AC.resume(); } catch (e) { } }
+        function tone(f, d, t, g, dl) { if (muted || !AC) return; const tt = AC.currentTime + (dl || 0), o = AC.createOscillator(), v = AC.createGain(); o.type = t || 'sine'; o.frequency.value = f; v.gain.setValueAtTime(.0001, tt); v.gain.linearRampToValueAtTime(g || .12, tt + .008); v.gain.exponentialRampToValueAtTime(.001, tt + d); o.connect(v); v.connect(AC.destination); o.start(tt); o.stop(tt + d + .05); }
+        function snd(n) { resumeAudio(); if (!AC || muted) return; switch (n) { case 'deal': tone(520, .07, 'triangle', .06); break; case 'sel': tone(700, .05, 'sine', .05); break; case 'play': tone(340, .06, 'triangle', .12); tone(560, .05, 'sine', .06, .02); break; case 'bito': tone(660, .12, 'sine', .12); tone(880, .2, 'sine', .12, .1); break; case 'take': tone(190, .07, 'triangle', .07); break; case 'transfer': tone(420, .07, 'square', .05); tone(640, .07, 'square', .05, .07); break; case 'win': [523, 659, 784, 1047].forEach((f, i) => tone(f, .22, 'triangle', .12, i * .13)); break; case 'lose': [392, 330, 262, 196].forEach((f, i) => tone(f, .3, 'triangle', .1, i * .16)); break; case 'bad': tone(140, .12, 'square', .06); break; } }
+
+        function makeCardEl(c) { const el = document.createElement('div'); el.className = 'card ' + (isRedSuit(c.suit) ? 'red' : 'black'); el.dataset.id = c.id; const r = RANK_DISPLAY[c.rank], s = SUITS[c.suit]; const mid = c.rank >= 11 ? `<span class="court">${r}</span><span class="pipsm">${s}</span>` : `<span class="pip">${s}</span>`; el.innerHTML = `<div class="lift"><div class="inner"><div class="face back"></div><div class="face front"><div class="ci tl"><b>${r}</b><i>${s}</i></div><div class="mid">${mid}</div><div class="ci br"><b>${r}</b><i>${s}</i></div></div></div></div>`; return el; }
+        function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1);[a[i], a[j]] = [a[j], a[i]]; } }
+
+        /* ===== Rules ===== */
+        function canBeat(a, d) { if (d.suit === a.suit) return d.rank > a.rank; return d.suit === G.trump && a.suit !== G.trump; }
+        function uncovered() { return G.table.filter(p => !p.defense); }
+        function tableRanks() { const s = new Set(); G.table.forEach(p => { s.add(p.attack.rank); if (p.defense) s.add(p.defense.rank); }); return s; }
+        function attackRanks() { const s = new Set(); G.table.forEach(p => s.add(p.attack.rank)); return s; }
+        function canThrow() { return G.table.length > 0 && G.table.length < 6 && G[G.defender].hand.length > uncovered().length; }
+        function canThrowExtra() { return G.table.length < Math.min(6, G.defHandAtBout || 6); }
+        function transferOK() { if (!G || !G.table || G.table.length === 0) return false; if (!G.table.every(p => !p.defense)) return false; if (G.table.length >= 6) return false; if (G.firstBout) return false; return G[G.attacker].hand.length >= uncovered().length + 1; }
+        function sortHand(s) { G[s].hand.sort((a, b) => { const at = a.suit === G.trump, bt = b.suit === G.trump; if (at !== bt) return at ? 1 : -1; return a.rank - b.rank || a.suit - b.suit; }); }
+        function rmHand(s, c) { const i = G[s].hand.indexOf(c); if (i >= 0) G[s].hand.splice(i, 1); }
+        const prio = c => c.rank + (c.suit === G.trump ? 20 : 0);
+
+        /* ===== Actions ===== */
+        function doAttack(side, c) { if (!c || !G || G.over) return; rmHand(side, c); G.table.push({ attack: c, defense: null }); handLayout(side); layoutTable(); snd('play'); poke(); }
+        function doDefend(pair, c) { if (!pair || !c || !G || G.over) return; rmHand(G.defender, c); pair.defense = c; handLayout(G.defender); layoutTable(); snd('play'); poke(); }
+        function doTransfer(side, c) { if (!G || G.over || !c) return; if (side !== G.defender) return; rmHand(side, c); G.table.push({ attack: c, defense: null }); const t = G.attacker; G.attacker = G.defender; G.defender = t; G.defHandAtBout = G[G.defender].hand.length; toast('Перевод!'); snd('transfer'); handLayout(side); layoutTable(); poke(); }
+        function doTake(side) { if (!G || G.over || G.busy) return; G.phase = 'taking'; G.taker = side; snd('take'); if (side === 'human' && !SPECTATING) toast('Вы берёте...'); poke(); }
+        async function executeTake() {
+            if (G.busy || G.phase !== 'taking') return;
+            G.busy = true; const seq = G.seq, side = G.taker; clearSel();
+            const cards = []; G.table.forEach(p => { cards.push(p.attack); if (p.defense) cards.push(p.defense); });
+            G.table = []; layoutTable();
+            for (const c of cards) { if (seq !== G.seq) return; G[side].hand.push(c); sortHand(side); handLayout(side); snd('take'); await sleep(50); }
+            if (seq !== G.seq) return; await sleep(200); if (seq !== G.seq) return;
+            G.busy = false; G.phase = 'attack'; G.taker = null; endBout(true);
+        }
+        async function doBito() {
+            if (G.busy || !G.table.length) return;
+            G.busy = true; const seq = G.seq; clearSel(); toast('Бито!'); snd('bito');
+            const cards = []; G.table.forEach(p => { cards.push(p.attack); if (p.defense) cards.push(p.defense); });
+            G.table = []; layoutTable();
+            const bp = bitaPos();
+            for (const c of cards) { if (seq !== G.seq) return; G.bita.push(c); placeCard(c, bp.x + rnd(9) - 4, bp.y + rnd(9) - 4, rnd(30) - 15, false, 5 + G.bita.length); await sleep(45); }
+            if (seq !== G.seq) return; layoutBitaUI(); await sleep(200); if (seq !== G.seq) return;
+            G.busy = false; endBout(false);
+        }
+        async function endBout(took) {
+            const seq = G.seq; const lastDefender = G.defender;
+            await replenish(seq); if (seq !== G.seq) return;
+            if (!took) { const t = G.attacker; G.attacker = G.defender; G.defender = t; }
+            G.firstBout = false;
+            if (checkEnd(lastDefender)) return;
+            G.phase = 'attack'; G.defHandAtBout = G[G.defender].hand.length; poke();
+        }
+        async function replenish(seq) {
+            for (const side of [G.attacker, G.defender]) {
+                while (G[side].hand.length < 6 && G.deck.length > 0) {
+                    if (seq !== G.seq) return;
+                    const c = G.deck.pop(); G[side].hand.push(c); layoutDeckUI();
+                    appearCard(c, deckPos().x, deckPos().y); await sleep(30);
+                    sortHand(side); handLayout(side); await sleep(60);
+                }
+            }
+        }
+        function checkEnd(lastDefender) {
+            if (G.deck.length) return false;
+            const h = G.human.hand.length, a = G.ai.hand.length;
+            if (!h && !a) { over(lastDefender === 'human' ? 'ai' : 'human'); return true; }
+            if (!h) { over('human'); return true; }
+            if (!a) { over('ai'); return true; }
+            return false;
+        }
+        function over(w) {
+            if (!G || G.over) return;
+            G.over = true; G.phase = 'over';
+            if (w === 'human') { SCORE.h++; MATCH.h++; snd('win'); confetti(); }
+            else { SCORE.a++; MATCH.a++; snd('lose'); }
+            saveScore(); updMatch(); updScore();
+            $('#geTitle').textContent = w === 'human' ? 'ПОБЕДА!' : 'ВЫ В ДУРАКАХ';
+            $('#geDetail').textContent = w === 'human' ? 'ИИ остался с картами!' : 'Вы остались с картами.';
+            $('#geFinal').textContent = `Счёт: ${SCORE.h}:${SCORE.a} · Матчи: ${MATCH.h}—${MATCH.a}`;
+            finalizeGameTraining(w);
+            if (!SPECTATING) { setTimeout(() => $('#gameEnd').classList.add('show'), 700); }
+            else setTimeout(() => { if (SPECTATING) { SCORE = { h: 0, a: 0 }; startRound(); } }, 1500);
+        }
+
+        /* ===== AI (MCTS) — side-agnostic ===== */
+        function isAIControlled(side) { return SPECTATING || side === 'ai'; }
+        function currentActor() {
+            if (!G) return null;
+            if (G.phase === 'taking') return G.attacker;
+            const unc = uncovered();
+            if (G.table.length === 0) return G.attacker;
+            if (unc.length > 0) return G.defender;
+            return G.attacker;
+        }
+        function poke() {
+            refreshUI();
+            if (!G || G.over || G.phase === 'deal') return;
+            clearTimeout(AI_T);
+            if (G.deck.length === 0 && !G.table.length) {
+                if (G.human.hand.length === 0 && G.ai.hand.length === 0) { over(G.defender === 'human' ? 'ai' : 'human'); return; }
+                if (G.human.hand.length === 0) { over('human'); return; }
+                if (G.ai.hand.length === 0) { over('ai'); return; }
+            }
+            const actor = currentActor();
+            if (actor && isAIControlled(actor) && !G.busy) {
+                AI_T = setTimeout(() => aiMoveFor(actor), SPECTATING ? 250 : 400 + rnd(300));
+            }
+        }
+        function aiMoveFor(side) {
+            if (!G || G.over || G.busy) return;
+            if (SPECTATING) $('#spectateInfo').textContent = '🤖 ' + (side === 'human' ? 'ИИ-1' : 'ИИ-2') + ' думает…';
+            $('#thinkInd').textContent = 'ИИ думает…';
+            setTimeout(() => {
+                $('#thinkInd').textContent = ''; if (SPECTATING) $('#spectateInfo').textContent = '';
+                if (!G || G.over || G.busy) return;
+                try {
+                    recordPos(side);
+                    if (G.phase === 'taking') { aiTaking(side); return; }
+                    const unc = uncovered();
+                    if (G.attacker === side) {
+                        if (G.table.length === 0) aiAttackFirst(side);
+                        else if (unc.length === 0) aiAttackMore(side);
+                        else poke();
+                    } else if (G.defender === side) {
+                        if (unc.length > 0) aiDefend(side);
+                        else poke();
+                    }
+                } catch (e) { fallbackAction(side); }
+            }, SPECTATING ? 50 : 80);
+        }
+        function fallbackAction(side) {
+            if (!G || G.over || G.busy) return;
+            try {
+                if (G.phase === 'taking') { if (G.attacker === side) executeTake(); return; }
+                const unc = uncovered();
+                if (G.defender === side && unc.length > 0) {
+                    for (const p of unc) { const beats = G[side].hand.filter(c => canBeat(p.attack, c)); if (beats.length) { doDefend(p, beats[0]); return; } }
+                    doTake(side); return;
+                }
+                if (G.attacker === side) {
+                    if (G.table.length === 0) { if (G[side].hand.length) doAttack(side, G[side].hand[0]); return; }
+                    if (unc.length === 0) { doBito(); return; }
+                }
+            } catch (e) { }
+        }
+        function aiTaking(side) {
+            const ranks = tableRanks();
+            const cand = G[side].hand.filter(c => ranks.has(c.rank) && c.suit !== G.trump).sort((a, b) => a.rank - b.rank);
+            if (cand.length && canThrowExtra()) doAttack(side, cand[0]);
+            else executeTake();
+        }
+        function aiAttackFirst(side) {
+            const hand = G[side].hand;
+            if (!hand.length) { poke(); return; }
+            const st = idState(side); const seen = new Set(); const cands = [];
+            for (const c of hand) { if (!seen.has(c.rank)) { seen.add(c.rank); cands.push(c); } }
+            let best = null, bestV = -Infinity;
+            for (const c of cands) {
+                const s2 = clone(st); const idx = s2.a.indexOf(cardToId(c)); if (idx < 0) continue;
+                s2.a.splice(idx, 1); s2.tbl.push({ a: cardToId(c), d: null });
+                const v = mcEval(s2, AI_ITERS());
+                if (v > bestV) { bestV = v; best = c; }
+            }
+            doAttack(side, best || hand[0]);
+        }
+        function aiAttackMore(side) {
+            const st = idState(side);
+            const bitoS = clone(st); bitoS.tbl = []; bitoS.atk = 1 - st.atk;
+            const vBito = mcEval(bitoS, AI_ITERS());
+            const ranks = tableRanks();
+            const cands = G[side].hand.filter(c => ranks.has(c.rank) && canThrow());
+            let best = null, bestV = -Infinity;
+            for (const c of cands) {
+                const s2 = clone(st); const idx = s2.a.indexOf(cardToId(c)); if (idx < 0) continue;
+                s2.a.splice(idx, 1); s2.tbl.push({ a: cardToId(c), d: null });
+                const v = mcEval(s2, AI_ITERS());
+                if (v > bestV) { bestV = v; best = c; }
+            }
+            if (best && bestV > vBito + 0.05) doAttack(side, best);
+            else doBito();
+        }
+        function planDefense(hand, unc) {
+            const used = new Set(); const plan = [];
+            const sorted = [...unc].sort((a, b) => b.attack.rank - a.attack.rank);
+            for (const p of sorted) {
+                let bc = null, bst = Infinity;
+                for (const c of hand) { if (used.has(c)) continue; if (canBeat(p.attack, c)) { const st = c.rank + (c.suit === G.trump ? 100 : 0); if (st < bst) { bst = st; bc = c; } } }
+                if (!bc) return null;
+                used.add(bc); plan.push({ attack: p.attack, beat: bc });
+            }
+            return plan;
+        }
+        async function aiDefend(side) {
+            const unc = uncovered(); if (!unc.length) { poke(); return; }
+            const st = idState(side); const options = [];
+            const plan = planDefense(G[side].hand, unc);
+            if (plan) {
+                const s2 = clone(st);
+                for (const p of plan) { const bi = s2.a.indexOf(cardToId(p.beat)); if (bi >= 0) s2.a.splice(bi, 1); const tp = s2.tbl.find(pp => pp.a === cardToId(p.attack) && !pp.d); if (tp) tp.d = cardToId(p.beat); }
+                options.push({ type: 'beat', state: s2, plan });
+            }
+            const sT = clone(st); const all = []; sT.tbl.forEach(p => { all.push(p.a); if (p.d) all.push(p.d); });
+            sT.a = sT.a.concat(all); sT.tbl = []; options.push({ type: 'take', state: sT });
+            if (transferOK()) {
+                const aR = attackRanks(); const tc = G[side].hand.filter(c => aR.has(c.rank));
+                if (tc.length) {
+                    const c = tc.reduce((a, b) => a.rank < b.rank ? a : b);
+                    const s3 = clone(st); const ci = s3.a.indexOf(cardToId(c)); if (ci >= 0) s3.a.splice(ci, 1);
+                    s3.tbl.push({ a: cardToId(c), d: null }); s3.atk = 1 - s3.atk;
+                    options.push({ type: 'transfer', card: c, state: s3 });
+                }
+            }
+            let best = null, bestV = -Infinity;
+            for (const o of options) { const v = mcEval(o.state, AI_ITERS()); if (v > bestV) { bestV = v; best = o; } }
+            if (!best) { doTake(side); return; }
+            if (best.type === 'take') { doTake(side); return; }
+            if (best.type === 'transfer') { doTransfer(side, best.card); return; }
+            const seq = G.seq; G.busy = true;
+            try {
+                for (const p of best.plan) {
+                    if (seq !== G.seq) return;
+                    const livePair = G.table.find(pp => !pp.defense && pp.attack === p.attack);
+                    const liveBeat = G[side].hand.find(c => c === p.beat);
+                    if (livePair && liveBeat) { rmHand(side, liveBeat); livePair.defense = liveBeat; layoutTable(); snd('play'); await sleep(150); }
+                }
+            } catch (e) { }
+            if (seq !== G.seq) return;
+            G.busy = false; handLayout(side); poke();
+        }
+
+        /* ===== Human ===== */
+        function clearSel() {
+            if (G) G.sel = null;
+            document.querySelectorAll('.card.selected,.card.canBeat,.card.tr').forEach(e => e.classList.remove('selected', 'canBeat', 'tr'));
+        }
+        /* НОВОЕ: защита в один клик */
+        function hClick(c) {
+            if (!G || G.busy || G.over || SPECTATING) return;
+            if (G.phase === 'taking' && G.attacker === 'human') {
+                if (tableRanks().has(c.rank) && canThrowExtra()) { clearSel(); doAttack('human', c); } else bad(c.el);
+                return;
+            }
+            if (G.phase !== 'attack') return;
+            if (G.attacker === 'human') {
+                if (G.table.length === 0 || (tableRanks().has(c.rank) && canThrow())) { clearSel(); doAttack('human', c); }
+                else { bad(c.el); toast('Нельзя!'); }
+            } else if (G.defender === 'human') {
+                const unc = uncovered();
+                if (!unc.length) return;
+                if (G.sel === c) { clearSel(); refreshUI(); return; }
+                const tg = unc.filter(p => canBeat(p.attack, c));
+                const canTr = transferOK() && attackRanks().has(c.rank);
+                if (tg.length > 0 && canTr) {
+                    // редкий случай: можно и побить, и перевести -> предложить выбор
+                    clearSel(); G.sel = c; c.el.classList.add('selected'); snd('sel'); refreshUI();
+                } else if (tg.length > 0) {
+                    // автобой: бьём самую ценную атакующую карту
+                    const best = tg.slice().sort((a, b) => prio(b.attack) - prio(a.attack))[0];
+                    clearSel(); doDefend(best, c);
+                } else if (canTr) {
+                    // карта годится только для перевода -> автоперевод
+                    clearSel(); doTransfer('human', c);
+                } else {
+                    bad(c.el);
+                }
+            }
+        }
+        function humanDefend() {
+            if (G.busy || SPECTATING || !G.sel) return;
+            const c = G.sel;
+            const unc = uncovered();
+            const tg = unc.filter(p => canBeat(p.attack, c));
+            if (!tg.length) { toast('Нельзя побить!'); bad(c.el); clearSel(); return; }
+            const best = tg.slice().sort((a, b) => prio(b.attack) - prio(a.attack))[0];
+            clearSel(); doDefend(best, c);
+        }
+        function humanTransfer() {
+            if (G.busy || SPECTATING || !G.sel) return;
+            if (!transferOK() || !attackRanks().has(G.sel.rank)) { toast('Нельзя!'); clearSel(); refreshUI(); return; }
+            const c = G.sel; clearSel(); doTransfer('human', c);
+        }
+        function humanBito() { if (G.busy || SPECTATING) return; if (G.attacker !== 'human') return; if (uncovered().length > 0) return; if (!G.table.length) return; clearSel(); doBito(); }
+        function humanTake() { if (G.busy || SPECTATING) return; if (G.defender !== 'human') return; clearSel(); doTake('human'); }
+        function humanDone() { if (G.busy || SPECTATING) return; if (G.phase !== 'taking' || G.attacker !== 'human') return; executeTake(); }
+
+        /* ===== ОБУЧЕНИЕ (общее для игры с человеком и наблюдения) ===== */
+        let HUMAN_GAME_TRAJECTORY = [];
+        function recordPos(side) {
+            if (!NN_READY || !G || G.over) return;
+            try { HUMAN_GAME_TRAJECTORY.push({ state: Array.from(encodeState(side)), side }); } catch (e) { }
+        }
+        function finalizeGameTraining(winner) {
+            if (HUMAN_GAME_TRAJECTORY.length === 0) return;
+            for (const s of HUMAN_GAME_TRAJECTORY) {
+                s.policy = new Array(NN_ACTIONS).fill(1 / NN_ACTIONS);
+                s.value = winner ? (s.side === winner ? 1 : -1) : 0;
+                addToBuffer(s);
+            }
+            addTrainLog((SPECTATING ? '👁 ' : '') + 'Игра: +' + HUMAN_GAME_TRAJECTORY.length + ' поз.');
+            HUMAN_GAME_TRAJECTORY = [];
+            const shouldTrain = SPECTATING || ($('#autoTrainChk') && $('#autoTrainChk').checked);
+            if (NN_TRAIN_BUFFER.length >= 32 && shouldTrain) {
+                trainOnBuffer().then(l => { if (l !== null) { addTrainLog('Авто: ' + l.toFixed(3)); saveModelToLS(); } });
+            }
+        }
+        async function playSelfPlayGame() {
+            const traj = [];
+            let hands = [[], []], deck = [], trump = 0, attacker = rnd(2), table = [];
+            let cards = []; for (let s = 0; s < 4; s++)for (let r = 6; r <= 14; r++)cards.push(s * 9 + (r - 6));
+            shuffle(cards); trump = idSuit(cards[0]); deck = cards.slice(12);
+            hands[0] = cards.slice(0, 6); hands[1] = cards.slice(6, 12);
+            let guard = 0;
+            while (guard++ < 250) {
+                if (deck.length === 0) { if (hands[0].length === 0 || hands[1].length === 0) break; }
+                if (hands[0].length === 0 && hands[1].length === 0) break;
+                traj.push({ state: Array.from(encodeSimState(hands, trump, attacker)), side: attacker });
+                if (table.length === 0) {
+                    if (hands[attacker].length === 0) { attacker = 1 - attacker; continue; }
+                    const c = pickLow(hands[attacker], trump); if (c == null) break;
+                    rmId(hands[attacker], c); table.push({ a: c, d: null });
+                } else {
+                    const ranks = new Set(); table.forEach(p => { ranks.add(idRank(p.a)); if (p.d) ranks.add(idRank(p.d)); });
+                    const unc = table.filter(p => !p.d);
+                    let threw = false;
+                    if (table.length < 6 && hands[1 - attacker].length > unc.length && hands[attacker].length > 0) {
+                        const cand = hands[attacker].filter(id => ranks.has(idRank(id)));
+                        if (cand.length) { const c = pickLow(cand, trump); if (c != null) { rmId(hands[attacker], c); table.push({ a: c, d: null }); threw = true; } }
+                    }
+                    if (!threw) {
+                        const uncov = table.filter(p => !p.d); let ok = true;
+                        for (const p of uncov) { const b = findBeat(hands[1 - attacker], p.a, trump); if (b == null) { ok = false; break; } rmId(hands[1 - attacker], b); p.d = b; }
+                        if (ok) { table = []; attacker = 1 - attacker; }
+                        else { for (const p of table) { hands[1 - attacker].push(p.a); if (p.d) hands[1 - attacker].push(p.d); } table = []; }
+                        for (const s of [attacker, 1 - attacker]) { while (hands[s].length < 6 && deck.length) hands[s].push(deck.pop()); }
+                    }
+                }
+                await sleep(0);
+            }
+            let w = -1;
+            if (hands[0].length === 0 && hands[1].length > 0) w = 0;
+            else if (hands[1].length === 0 && hands[0].length > 0) w = 1;
+            for (const s of traj) { s.policy = new Array(NN_ACTIONS).fill(1 / NN_ACTIONS); s.value = w === -1 ? 0 : (s.side === w ? 1 : -1); addToBuffer(s); }
+            NN_GAMES++; $('#nnGames').textContent = NN_GAMES;
+            return { winner: w, trajectoryLength: traj.length };
+        }
+        function encodeSimState(hands, trump, attacker) {
+            const v = new Float32Array(NN_STATE_SIZE);
+            const sh = new Set(hands[attacker]), oh = new Set(hands[1 - attacker]);
+            for (let id = 0; id < 36; id++) { const o = id * 4; v[o] = 0; v[o + 1] = sh.has(id) ? 1 : 0; v[o + 2] = oh.has(id) ? 1 : 0; v[o + 3] = 0; }
+            let k = 144;
+            for (let s = 0; s < 4; s++)v[k + s] = (s === trump) ? 1 : 0; k += 4;
+            v[k++] = 0; v[k++] = 0;
+            v[k++] = hands[attacker].length / 6; v[k++] = hands[1 - attacker].length / 6;
+            v[k++] = 0; v[k++] = 0;
+            v[k++] = 1; v[k++] = 0; v[k++] = 1; v[k++] = 0; v[k++] = 0; v[k++] = 0;
+            v[k++] = 0; v[k++] = 0; v[k++] = 0;
+            while (k < NN_STATE_SIZE) v[k++] = 0;
+            return v;
+        }
+        let CONT_TRAINING = false, CONT_GAMES = 0, CONT_TOTAL_POS = 0, CONT_START_TIME = 0;
+        async function continuousTrainLoop() {
+            if (!NN_READY) { toast('НН не готова'); return; }
+            if (CONT_TRAINING) { stopContinuousTraining(); return; }
+            CONT_TRAINING = true; CONT_GAMES = 0; CONT_TOTAL_POS = 0; CONT_START_TIME = Date.now();
+            $('#contTrainBtn').textContent = '⏹ Остановить'; $('#contTrainBtn').classList.add('active');
+            addTrainLog('▶ Непрерывное обучение');
+            while (CONT_TRAINING) {
+                for (let g = 0; g < 3; g++) {
+                    if (!CONT_TRAINING) break; const r = await playSelfPlayGame(); CONT_GAMES++; CONT_TOTAL_POS += r.trajectoryLength;
+                    $('#contStats').textContent = `Партий:${CONT_GAMES} Поз:${CONT_TOTAL_POS} ${((Date.now() - CONT_START_TIME) / 1000).toFixed(0)}с`; await sleep(0);
+                }
+                if (!CONT_TRAINING) break;
+                if (NN_TRAIN_BUFFER.length >= 10) await trainOnBuffer();
+                if (CONT_GAMES % 10 === 0) await saveModelToLS();
+                await sleep(0);
+            }
+        }
+        function stopContinuousTraining() { CONT_TRAINING = false; $('#contTrainBtn').textContent = '▶ Непрерывное обучение'; $('#contTrainBtn').classList.remove('active'); $('#contStats').textContent = ''; addTrainLog(`⏹ ${CONT_GAMES} партий`); saveModelToLS(); }
+
+        /* ===== Spectate ===== */
+        let SPECTATING = false;
+        function startSpectate() { SPECTATING = true; $('#spectateBtn').textContent = '⏹ Стоп'; $('#spectateBtn').classList.add('active'); $('#start').classList.remove('show'); addTrainLog('👁 Наблюдение'); newGame(); }
+        function stopSpectate() { SPECTATING = false; $('#spectateBtn').textContent = '👁 Наблюдать'; $('#spectateBtn').classList.remove('active'); $('#spectateInfo').textContent = ''; if (G) G.over = true; $('#start').classList.add('show'); }
+
+        /* ===== Flow ===== */
+        function newGame() { clearTimeout(AI_T); SCORE = { h: 0, a: 0 }; saveScore(); updScore(); HUMAN_GAME_TRAJECTORY = []; startRound(); }
+        function startRound() {
+            const seq = (G && G.seq || 0) + 1;
+            G = { seq, deck: [], bita: [], table: [], trump: 0, human: { hand: [] }, ai: { hand: [] }, attacker: 'human', defender: 'ai', phase: 'idle', over: false, busy: false, firstBout: true, defHandAtBout: 6, taker: null, sel: null };
+            HUMAN_GAME_TRAJECTORY = [];
+            CARDS.clear();
+            document.querySelectorAll('#cards .card').forEach(e => e.remove());
+            let id = 0;
+            for (let s = 0; s < 4; s++)for (let r = 6; r <= 14; r++) {
+                const c = { id, suit: s, rank: r, up: false, el: null };
+                c.el = makeCardEl(c);
+                CARDS.set(id, c); G.deck.push(c); id++;
+            }
+            shuffle(G.deck);
+            G.trump = G.deck[0].suit;
+            $('#trumpSym').textContent = RANK_DISPLAY[G.deck[0].rank] + SUITS[G.trump];
+            $('#trumpSym').className = isRedSuit(G.trump) ? 'red-t' : 'blk-t';
+            G.deck.forEach(c => { c.el.style.opacity = 0; $('#cards').appendChild(c.el); });
+            $('#gameEnd').classList.remove('show');
+            measure(); layoutAll(); deal();
+        }
+        async function deal() {
+            const seq = G.seq; G.phase = 'deal'; refreshUI();
+            for (let i = 0; i < 6; i++) {
+                for (const side of ['human', 'ai']) {
+                    if (seq !== G.seq || G.deck.length === 0) return;
+                    const c = G.deck.pop(); G[side].hand.push(c);
+                    appearCard(c, deckPos().x, deckPos().y); layoutDeckUI();
+                    await sleep(30); sortHand(side); handLayout(side); snd('deal'); await sleep(80);
+                }
+            }
+            if (seq !== G.seq) return;
+            sortHand('human'); sortHand('ai'); handLayout('human'); handLayout('ai');
+            await sleep(300);
+            let best = 99, first = 'human';
+            for (const s of ['human', 'ai']) for (const c of G[s].hand) if (c.suit === G.trump && c.rank < best) { best = c.rank; first = s; }
+            G.attacker = first; G.defender = first === 'human' ? 'ai' : 'human';
+            G.firstBout = true; G.defHandAtBout = G[G.defender].hand.length;
+            G.phase = 'attack'; poke();
+        }
+        function refreshUI() {
+            if (!G) return;
+            const unc = uncovered(); let m = '';
+            if (G.phase === 'deal') m = 'Раздача…';
+            else if (G.over) m = SPECTATING ? '👁 ИИ vs ИИ' : 'Игра окончена';
+            else if (G.phase === 'taking') m = G.attacker === 'human' ? (SPECTATING ? 'ИИ-1 подкидывает' : 'Подкиньте или «Готово»') : (SPECTATING ? 'ИИ-2 берёт' : 'Вы берёте...');
+            else if (G.attacker === 'human') {
+                if (!G.table.length) m = SPECTATING ? 'ИИ-1 атакует' : 'Ваш ход — атакуйте';
+                else if (!unc.length) m = SPECTATING ? 'ИИ-1 думает' : 'Подкиньте или «Бито»';
+                else m = SPECTATING ? 'ИИ-2 отбивается' : 'ИИ отбивается';
+            } else {
+                if (!G.table.length) m = SPECTATING ? 'ИИ-2 атакует' : 'ИИ атакует…';
+                else if (unc.length) m = SPECTATING ? 'ИИ-1 отбивается' : 'Отбивайтесь: клик по карте бьёт / ⇄ переводит';
+                else m = SPECTATING ? 'ИИ-1 думает' : 'ИИ думает…';
+            }
+            $('#msg').textContent = m;
+            const inTaking = G.phase === 'taking';
+            const spBlock = SPECTATING;
+            $('#bitoBtn').style.display = (!spBlock && !G.over && !G.busy && !inTaking && G.attacker === 'human' && G.table.length && !unc.length) ? '' : 'none';
+            $('#takeBtn').style.display = (!spBlock && !G.over && !G.busy && !inTaking && G.defender === 'human' && G.table.length && unc.length) ? '' : 'none';
+            $('#doneBtn').style.display = (!spBlock && !G.over && !G.busy && inTaking && G.attacker === 'human') ? '' : 'none';
+            /* Кнопки ПОБИТЬ/ПЕРЕВЕСТИ — только когда выбранная карта может и то, и другое */
+            const humanDef = !spBlock && !G.over && !G.busy && !inTaking && G.phase === 'attack' && G.defender === 'human' && unc.length > 0;
+            let showBeat = false, showTrans = false;
+            if (humanDef && G.sel) {
+                const selBeats = unc.some(p => canBeat(p.attack, G.sel));
+                const selTr = transferOK() && attackRanks().has(G.sel.rank);
+                if (selBeats && selTr) { showBeat = true; showTrans = true; }
+            }
+            $('#beatBtn').style.display = showBeat ? '' : 'none';
+            $('#transferBtn').style.display = showTrans ? '' : 'none';
+            /* Подсветка: зелёная рамка = можно побить, значок ⇄ = можно перевести */
+            G.human.hand.forEach(c => {
+                const can = humanDef && unc.some(p => canBeat(p.attack, c));
+                const tr = humanDef && transferOK() && attackRanks().has(c.rank);
+                c.el.classList.toggle('canBeat', can);
+                c.el.classList.toggle('tr', tr);
+            });
+            document.body.classList.toggle('humanAtk', !G.over && G.phase !== 'deal' && G.attacker === 'human');
+            document.body.classList.toggle('aiAtk', !G.over && G.phase !== 'deal' && G.attacker === 'ai');
+            $('#cardsH').textContent = G.human.hand.length; $('#cardsA').textContent = G.ai.hand.length;
+            if (!G.busy) layoutAll();
+        }
+        function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.remove('in'); void e.offsetWidth; e.classList.add('in'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('in'), 2000); }
+        function bad(el) { el.classList.remove('bad'); void el.offsetWidth; el.classList.add('bad'); snd('bad'); setTimeout(() => el.classList.remove('bad'), 450); }
+        function confetti() { const box = $('#gameEnd'); for (let i = 0; i < 18; i++) { const s = document.createElement('span'); s.className = 'cf'; const si = rnd(4); s.textContent = SUITS[si]; s.style.left = (2 + rnd(96)) + '%'; s.style.color = isRedSuit(si) ? '#ff6b6b' : '#f0e6c8'; s.style.fontSize = (14 + rnd(20)) + 'px'; s.style.animationDuration = (2.4 + Math.random() * 2) + 's'; s.style.animationDelay = (Math.random() * 1.2) + 's'; box.appendChild(s); setTimeout(() => s.remove(), 6500); } }
+
+        /* ===== Events ===== */
+        document.addEventListener('pointerdown', e => {
+            if (e.target.closest('button,.ov,#nnPanel')) return;
+            resumeAudio();
+            const cel = e.target.closest('.card');
+            if (cel && G) { const c = CARDS.get(+cel.dataset.id); if (c && G.human.hand.includes(c)) { hClick(c); return; } }
+            clearSel(); refreshUI();
+        });
+        document.addEventListener('contextmenu', e => { if (e.target.closest('#board')) e.preventDefault(); });
+        $('#playBtn').onclick = () => { resumeAudio(); if (SPECTATING) stopSpectate(); $('#start').classList.remove('show'); newGame(); };
+        $('#newBtn').onclick = () => { resumeAudio(); if (SPECTATING) stopSpectate(); newGame(); };
+        $('#menuBtn').onclick = () => { $('#nnPanel').classList.toggle('hidden'); $('#menuBtn').classList.toggle('active'); };
+        $('#helpBtn').onclick = () => $('#help').classList.add('show');
+        $('#helpClose').onclick = () => $('#help').classList.remove('show');
+        $('#sndBtn').onclick = () => { muted = !muted; $('#sndBtn').classList.toggle('off', muted); };
+        $('#beatBtn').onclick = () => humanDefend();
+        $('#transferBtn').onclick = () => humanTransfer();
+        $('#bitoBtn').onclick = () => humanBito();
+        $('#takeBtn').onclick = () => humanTake();
+        $('#doneBtn').onclick = () => humanDone();
+        $('#geNewBtn').onclick = () => { $('#gameEnd').classList.remove('show'); newGame(); };
+        $('#score').onclick = () => { if (confirm('Сбросить счёт?')) { SCORE = { h: 0, a: 0 }; updScore(); } };
+        $('#resetMatchBtn').onclick = () => { MATCH = { h: 0, a: 0 }; updMatch(); };
+        $('#contTrainBtn').onclick = () => continuousTrainLoop();
+        $('#spectateBtn').onclick = () => { if (SPECTATING) stopSpectate(); else startSpectate(); };
+        $('#trainNowBtn').onclick = async () => { if (!NN_READY) return; if (NN_TRAIN_BUFFER.length < 10) { toast('Буфер мал'); return; } const l = await trainOnBuffer(); if (l !== null) addTrainLog(`Ручное: ${l.toFixed(3)}`); };
+        $('#saveModelBtn').onclick = () => saveModelToLS();
+        $('#loadModelBtn').onclick = () => loadModelFromLS();
+        $('#exportModelBtn').onclick = () => exportModelSingleFile();
+        $('#importModelBtn').onclick = () => $('#importFileInput').click();
+        $('#importFileInput').onchange = e => { if (e.target.files.length > 0) importModelSingleFile(e.target.files[0]); e.target.value = ''; };
+        $('#resetModelBtn').onclick = () => resetModel();
+        addEventListener('resize', measure);
+        addEventListener('orientationchange', () => setTimeout(measure, 250));
+        updScore(); updMatch(); measure();
+        initNN(); addTrainLog('Игра загружена'); updateBufferDisplay();
+        if ('serviceWorker' in navigator && window.location.protocol !== 'file:') { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { }); }); }
+    </script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b3723">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Карточные игры">
+<title>Карточные игры</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="icon" href="icon-512.png" sizes="512x512">
+<style>
+:root{--cw:80px;--ch:114px;--gold:#f0d68a;--gold2:#c99b3f}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{background:#071b12;font-family:'Rubik','Segoe UI',system-ui,-apple-system,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
+#felt{position:fixed;inset:0;z-index:0;background:radial-gradient(125% 95% at 50% 30%,#2f8f63 0%,#1e6b47 46%,#124b31 76%,#0a3522 100%)}
+#felt::before{content:'';position:absolute;inset:0;opacity:.14;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.6'/></svg>")}
+#felt::after{content:'';position:absolute;inset:0;background:radial-gradient(90% 80% at 50% 45%,transparent 55%,rgba(0,0,0,.5) 100%)}
+#sheen{position:fixed;inset:-40%;z-index:1;pointer-events:none;background:linear-gradient(115deg,transparent 42%,rgba(255,255,255,.055) 50%,transparent 58%);animation:sheen 10s ease-in-out infinite}
+@keyframes sheen{0%,100%{transform:translateX(-16%)}50%{transform:translateX(16%)}}
+#frame{position:fixed;inset:8px;z-index:2;pointer-events:none;border:1px solid rgba(240,215,140,.3);border-radius:22px;box-shadow:inset 0 0 0 5px rgba(6,26,17,.35),inset 0 0 70px rgba(0,0,0,.4)}
+#frame::after{content:'';position:absolute;inset:5px;border:1px solid rgba(240,215,140,.13);border-radius:17px}
+#menu{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px}
+#menuTitle{font:900 clamp(28px,7vw,44px) 'Segoe UI','SF Pro Display',system-ui,Rubik,sans-serif;color:var(--gold);letter-spacing:.04em;text-shadow:0 3px 12px rgba(0,0,0,.6);text-align:center;margin-bottom:8px}
+#menuSub{color:#bfe0c8;font-size:clamp(13px,3vw,16px);text-align:center;margin-bottom:16px}
+.game-btn{position:relative;width:min(360px,88vw);padding:24px 28px;border:2px solid rgba(240,215,140,.45);border-radius:20px;background:linear-gradient(170deg,rgba(16,66,45,.9),rgba(10,43,29,.95));cursor:pointer;text-align:left;transition:transform .15s,box-shadow .15s,border-color .15s;box-shadow:0 8px 30px rgba(0,0,0,.4);display:flex;align-items:center;gap:18px}
+.game-btn:active{transform:scale(.97);box-shadow:0 4px 15px rgba(0,0,0,.5)}
+.game-btn:hover{border-color:var(--gold);box-shadow:0 8px 30px rgba(0,0,0,.5),0 0 20px rgba(240,214,138,.15)}
+.game-icon{width:64px;height:64px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0}
+.game-icon.fool{background:linear-gradient(135deg,#e2604f,#a72c23);color:#fff3ea}
+.game-icon.bur{background:linear-gradient(135deg,#8ec7ea,#2f7fae);color:#06222f}
+.game-info{flex:1;min-width:0}
+.game-info h2{font:800 clamp(18px,4.5vw,24px) 'Segoe UI','SF Pro Display',system-ui,Rubik,sans-serif;color:var(--gold);margin-bottom:4px}
+.game-info p{color:#bfe0c8;font-size:clamp(12px,2.8vw,14px);line-height:1.4}
+.game-arrow{color:rgba(240,215,140,.5);font-size:24px;flex-shrink:0}
+#fan{display:flex;justify-content:center;margin-bottom:8px;gap:0}
+.mcard{--r:0deg;--ty:0px;width:56px;height:80px;margin:0 -8px;border-radius:8px;background:linear-gradient(165deg,#fffdf4,#eee5cc);border:1px solid #cfc3a0;box-shadow:0 8px 20px rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(var(--r)) translateY(var(--ty));animation:bob 3.6s ease-in-out infinite}
+.mcard b{font:900 24px 'Segoe UI','SF Pro Display',system-ui;line-height:1}
+.mcard i{font-style:normal;font-size:20px;line-height:1.1}
+.mcard:nth-child(1){--r:-12deg;--ty:6px;animation-delay:.2s}
+.mcard:nth-child(2){z-index:2;--ty:-3px}
+.mcard:nth-child(3){--r:12deg;--ty:6px;animation-delay:.4s}
+@keyframes bob{50%{transform:rotate(var(--r)) translateY(calc(var(--ty) - 6px))}}
+.mcard.red{color:#c22f38}.mcard.blk{color:#232735}
+</style>
+</head>
+<body>
+<div id="felt"></div><div id="sheen"></div><div id="frame"></div>
+<div id="menu">
+  <div id="fan">
+    <div class="mcard red"><b>Т</b><i>♥</i></div>
+    <div class="mcard blk"><b>К</b><i>♠</i></div>
+    <div class="mcard red"><b>Д</b><i>♦</i></div>
+  </div>
+  <h1 id="menuTitle">КАРТОЧНЫЕ ИГРЫ</h1>
+  <p id="menuSub">Выберите игру</p>
+  <a href="durak.html" class="game-btn" style="text-decoration:none">
+    <div class="game-icon fool">♥</div>
+    <div class="game-info">
+      <h2>Подкидной Дурак</h2>
+      <p>Классика: бей, подкидывай, переводи · колода 36 карт</p>
+    </div>
+    <div class="game-arrow">›</div>
+  </a>
+  <a href="bur-kozel.html" class="game-btn" style="text-decoration:none">
+    <div class="game-icon bur">♠</div>
+    <div class="game-info">
+      <h2>Бур-Козёл</h2>
+      <p>Собирай очки, объявляй комбинации · 10 старше короля!</p>
+    </div>
+    <div class="game-arrow">›</div>
+  </a>
+  <a href="#" class="game-btn" style="text-decoration:none">
+    <div class="game-icon" style="background:linear-gradient(135deg,#f0d68a,#c99b3f);color:#3c2a06">?</div>
+    <div class="game-info">
+      <h2>Arena</h2>
+      <p>в разработке</p>
+    </div>
+    <div class="game-arrow">›</div>
+  </a>
+</div>
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>

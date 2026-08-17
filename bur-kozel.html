@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+    <meta name="theme-color" content="#0b3723">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Бур-Козёл">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <link rel="icon" href="./icon-192.png" sizes="192x192">
+    <title>Бур-козёл · MCTS+NN Self-Play</title>
+    <script src="./js/tf.min.js"></script>
+    <style>
+        :root {
+            --cw: 80px;
+            --ch: 114px
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden
+        }
+
+        body {
+            background: #071b12;
+            font-family: 'Rubik','Segoe UI',system-ui,sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none
+        }
+
+        #felt {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: radial-gradient(125% 95% at 50% 30%,#2f8f63 0%,#1e6b47 46%,#124b31 76%,#0a3522 100%)
+        }
+
+            #felt::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                opacity: .14;
+                mix-blend-mode: overlay;
+                background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.6'/></svg>")
+            }
+
+            #felt::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: radial-gradient(90% 80% at 50% 45%,transparent 55%,rgba(0,0,0,.5) 100%)
+            }
+
+        #sheen {
+            position: fixed;
+            inset: -40%;
+            z-index: 1;
+            pointer-events: none;
+            background: linear-gradient(115deg,transparent 42%,rgba(255,255,255,.055) 50%,transparent 58%);
+            animation: sheen 10s ease-in-out infinite
+        }
+
+        @keyframes sheen {
+            0%,100% {
+                transform: translateX(-16%)
+            }
+
+            50% {
+                transform: translateX(16%)
+            }
+        }
+
+        #frame {
+            position: fixed;
+            inset: 8px;
+            z-index: 2;
+            pointer-events: none;
+            border: 1px solid rgba(240,215,140,.3);
+            border-radius: 22px
+        }
+
+            #frame::after {
+                content: '';
+                position: absolute;
+                inset: 5px;
+                border: 1px solid rgba(240,215,140,.13);
+                border-radius: 17px
+            }
+
+        #topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 44px;
+            z-index: 60;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 14px;
+            pointer-events: none;
+            background: linear-gradient(rgba(4,16,10,.65),transparent)
+        }
+
+        #logo {
+            font: 900 13px Rubik,sans-serif;
+            color: #f0dfae;
+            letter-spacing: .12em;
+            pointer-events: auto;
+            white-space: nowrap
+        }
+
+            #logo .s1 {
+                color: #ff6b6b
+            }
+
+            #logo .s2 {
+                color: #e9e9f2
+            }
+
+        @media(max-width:640px) {
+            #logo .txt {
+                display: none
+            }
+        }
+
+        #tools {
+            display: flex;
+            gap: 8px;
+            pointer-events: auto
+        }
+
+        .tbtn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid rgba(240,215,140,.4);
+            background: rgba(6,24,15,.55);
+            color: #f0dfae;
+            font: 700 15px Rubik;
+            cursor: pointer;
+            transition: .15s
+        }
+
+            .tbtn:hover {
+                background: rgba(240,215,140,.18)
+            }
+
+            .tbtn.off {
+                opacity: .45
+            }
+
+            .tbtn.active {
+                background: rgba(240,215,140,.25);
+                border-color: #ffd873
+            }
+
+        #score {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%,-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(6,24,15,.6);
+            border: 1px solid rgba(240,215,140,.4);
+            border-radius: 999px;
+            padding: 4px 14px;
+            font: 800 13px Rubik;
+            color: #f0dfae;
+            pointer-events: auto;
+            cursor: pointer;
+            white-space: nowrap
+        }
+
+            #score b {
+                font-size: 15px;
+                color: #ffd873;
+                min-width: 12px;
+                text-align: center
+            }
+
+            #score .sc-l {
+                font: 600 10px Rubik;
+                letter-spacing: .06em;
+                color: #bfe0c8;
+                text-transform: uppercase
+            }
+
+            #score .sep {
+                color: #bfe0c8
+            }
+
+            #score.flash {
+                animation: scoreFlash .6s
+            }
+
+        @keyframes scoreFlash {
+            30% {
+                transform: translate(-50%,-50%) scale(1.3)
+            }
+        }
+
+        #board {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none
+        }
+
+        #cards {
+            position: absolute;
+            inset: 0
+        }
+
+        .card {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--cw);
+            height: var(--ch);
+            opacity: 0;
+            z-index: 10;
+            pointer-events: none;
+            perspective: 700px;
+            will-change: transform;
+            transition: transform .5s cubic-bezier(.25,.9,.3,1.04),opacity .3s
+        }
+
+            .card.noanim {
+                transition: none
+            }
+
+            .card.mine {
+                pointer-events: auto;
+                cursor: pointer
+            }
+
+            .card.selected .lift {
+                transform: translateY(-26px)
+            }
+
+            .card.canBeat .front {
+                box-shadow: 0 0 0 2px rgba(140,225,175,.55)
+            }
+
+            .card.bad .lift {
+                animation: shake .4s
+            }
+
+        @keyframes shake {
+            20% {
+                transform: translateX(-6px)
+            }
+
+            40% {
+                transform: translateX(6px)
+            }
+
+            60% {
+                transform: translateX(-4px)
+            }
+
+            80% {
+                transform: translateX(3px)
+            }
+        }
+
+        .lift {
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform .16s ease
+        }
+
+        @media(hover:hover) {
+            .card.mine:hover .lift {
+                transform: translateY(-14px)
+            }
+        }
+
+        .inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform .4s
+        }
+
+        .card.up .inner {
+            transform: rotateY(180deg)
+        }
+
+        .face {
+            position: absolute;
+            inset: 0;
+            border-radius: calc(var(--cw)*0.11);
+            backface-visibility: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,.35)
+        }
+
+        .front {
+            transform: rotateY(180deg);
+            background: linear-gradient(160deg,#fffdf5,#efe7d0);
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+            .front::after {
+                content: '';
+                position: absolute;
+                inset: 4%;
+                border: 1px solid rgba(0,0,0,.08);
+                border-radius: calc(var(--cw)*0.07)
+            }
+
+        .back {
+            background: radial-gradient(circle at 50% 42%,#8c2a40,#571526 80%);
+            border: 2px solid #ecd7a0
+        }
+
+            .back::before {
+                content: '';
+                position: absolute;
+                inset: 7%;
+                border-radius: calc(var(--cw)*0.06);
+                border: 1.5px solid rgba(236,215,160,.7);
+                background: repeating-linear-gradient(45deg,rgba(236,215,160,.16) 0 2px,transparent 2px 6px),repeating-linear-gradient(-45deg,rgba(236,215,160,.16) 0 2px,transparent 2px 6px)
+            }
+
+            .back::after {
+                content: '♛';
+                position: absolute;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: rgba(236,215,160,.9);
+                font-size: calc(var(--cw)*0.4);
+                text-shadow: 0 2px 4px rgba(0,0,0,.4)
+            }
+
+        .card.red {
+            color: #c22f38
+        }
+
+        .card.black {
+            color: #232735
+        }
+
+        .ci {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: .95;
+            font-weight: 800
+        }
+
+            .ci b {
+                font-weight: 800;
+                font-size: calc(var(--cw)*0.26)
+            }
+
+            .ci i {
+                font-style: normal;
+                font-size: calc(var(--cw)*0.22)
+            }
+
+        .tl {
+            top: 5%;
+            left: 7%
+        }
+
+        .br {
+            bottom: 5%;
+            right: 7%;
+            transform: rotate(180deg)
+        }
+
+        .mid {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1
+        }
+
+        .pip {
+            font-size: calc(var(--cw)*0.6)
+        }
+
+        .court {
+            font-weight: 800;
+            font-size: calc(var(--cw)*0.44)
+        }
+
+        .pipsm {
+            font-size: calc(var(--cw)*0.28);
+            margin-top: -2px
+        }
+
+        .pts {
+            position: absolute;
+            bottom: 22%;
+            right: 10%;
+            font: 800 calc(var(--cw)*0.18) Rubik;
+            color: #8a6420;
+            opacity: .7
+        }
+
+        #deckStack {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--cw);
+            height: var(--ch);
+            z-index: 6;
+            display: none;
+            border-radius: calc(var(--cw)*0.11);
+            background: radial-gradient(circle at 50% 45%,#8a2b3d,#55131f 78%);
+            border: 2px solid #e9d39a;
+            box-shadow: 2px 3px 0 -1px #f5eeda,2px 3px 0 0 #8d7f5c,5px 6px 0 -1px #f5eeda,5px 6px 0 0 #8d7f5c,8px 10px 18px rgba(0,0,0,.45)
+        }
+
+            #deckStack::before {
+                content: '';
+                position: absolute;
+                inset: 7%;
+                border-radius: calc(var(--cw)*0.06);
+                border: 1.5px solid rgba(233,211,154,.7);
+                background: repeating-linear-gradient(45deg,rgba(233,211,154,.14) 0 2px,transparent 2px 6px),repeating-linear-gradient(-45deg,rgba(233,211,154,.14) 0 2px,transparent 2px 6px)
+            }
+
+        #deckCount {
+            position: absolute;
+            right: -9px;
+            bottom: -9px;
+            min-width: 26px;
+            height: 26px;
+            padding: 0 6px;
+            border-radius: 13px;
+            background: linear-gradient(#f0d68a,#c99b3f);
+            color: #33250a;
+            font: 800 13px Rubik;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 6px rgba(0,0,0,.4)
+        }
+
+        .chip {
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 6;
+            background: rgba(5,22,14,.7);
+            border: 1px solid rgba(240,215,140,.45);
+            color: #efe3bd;
+            font: 600 13px Rubik;
+            padding: 5px 12px;
+            border-radius: 999px;
+            display: flex;
+            gap: 7px;
+            align-items: center;
+            white-space: nowrap
+        }
+
+            .chip b {
+                font-size: 18px;
+                line-height: 1;
+                font-weight: 800
+            }
+
+        .red-t {
+            color: #ff6b6b
+        }
+
+        .blk-t {
+            color: #e9e9f2
+        }
+
+        .pileWrap {
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 6;
+            width: var(--cw);
+            height: var(--ch)
+        }
+
+        .pileBadge {
+            position: absolute;
+            right: -9px;
+            bottom: -9px;
+            min-width: 26px;
+            height: 26px;
+            padding: 0 6px;
+            border-radius: 13px;
+            font: 800 13px Rubik;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 6px rgba(0,0,0,.4)
+        }
+
+            .pileBadge.human-b {
+                background: linear-gradient(#f0d68a,#c99b3f);
+                color: #33250a
+            }
+
+            .pileBadge.ai-b {
+                background: linear-gradient(#bcd9c3,#7fa98c);
+                color: #12301f
+            }
+
+        .pileLbl {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            text-align: center;
+            font: 600 10px Rubik;
+            color: rgba(240,215,140,.6);
+            letter-spacing: .1em;
+            text-transform: uppercase
+        }
+
+        #console {
+            position: fixed;
+            left: 0;
+            right: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none
+        }
+
+        #msg {
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font: 600 clamp(12px,2.9vw,15px) Rubik,sans-serif;
+            color: #f6ecc9;
+            background: rgba(6,24,15,.55);
+            border: 1px solid rgba(240,215,140,.3);
+            padding: 7px 18px;
+            border-radius: 999px;
+            max-width: 92vw;
+            text-align: center
+        }
+
+        #btns {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center
+        }
+
+            #btns button {
+                pointer-events: auto;
+                font: 800 15px Rubik,sans-serif;
+                letter-spacing: .06em;
+                border-radius: 16px;
+                padding: 13px 26px;
+                border: 0;
+                cursor: pointer;
+                transition: transform .08s,box-shadow .08s
+            }
+
+        #leadBtn {
+            background: linear-gradient(#f4dc94,#cf9f42);
+            color: #3c2a06;
+            box-shadow: 0 5px 0 #8a6420
+        }
+
+        #discardBtn {
+            background: linear-gradient(#e2604f,#a72c23);
+            color: #fff3ea;
+            box-shadow: 0 5px 0 #66150f
+        }
+
+        #beatBtn {
+            background: linear-gradient(#8fdcb2,#3f9e6f);
+            color: #0c2e1d;
+            box-shadow: 0 5px 0 #23603f
+        }
+
+        #comboBtn {
+            background: linear-gradient(#d4a5e8,#8b5fbf);
+            color: #1a0a2e;
+            box-shadow: 0 5px 0 #5a3d7a
+        }
+
+        #btns button:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 rgba(0,0,0,.4)
+        }
+
+        #toast {
+            position: fixed;
+            top: 54px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 70;
+            font: 800 16px Rubik,sans-serif;
+            color: #ffd873;
+            opacity: 0;
+            transition: .25s;
+            pointer-events: none;
+            white-space: nowrap
+        }
+
+            #toast.in {
+                opacity: 1
+            }
+
+        .ov {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(4,14,9,.8);
+            opacity: 0;
+            pointer-events: none;
+            transition: .35s;
+            padding: 18px
+        }
+
+            .ov.show {
+                opacity: 1;
+                pointer-events: auto
+            }
+
+        .ovbox {
+            position: relative;
+            background: linear-gradient(170deg,#10422d,#0a2b1d);
+            border: 2px solid rgba(240,214,138,.5);
+            border-radius: 20px;
+            padding: 30px 26px;
+            max-width: min(440px,94vw);
+            max-height: 92vh;
+            overflow: auto;
+            text-align: center
+        }
+
+            .ovbox h1 {
+                font: 900 clamp(26px,6.5vw,42px) Rubik,sans-serif;
+                color: #f0d68a;
+                margin-bottom: 8px
+            }
+
+            .ovbox h2 {
+                font: 800 22px Rubik,sans-serif;
+                color: #f0d68a;
+                margin-bottom: 14px
+            }
+
+        .tag {
+            color: #bfe0c8;
+            font-size: 14px;
+            margin-bottom: 16px
+        }
+
+        .ovbox ul {
+            text-align: left;
+            color: #d8ecd9;
+            font-size: 14px;
+            line-height: 1.5;
+            list-style: none;
+            margin: 0 0 20px
+        }
+
+            .ovbox ul li {
+                padding: 5px 0 5px 24px;
+                position: relative
+            }
+
+                .ovbox ul li::before {
+                    content: '♦';
+                    position: absolute;
+                    left: 2px;
+                    color: #e2604f
+                }
+
+        .bigbtn {
+            font: 900 17px Rubik,sans-serif;
+            border: 0;
+            border-radius: 16px;
+            padding: 15px 42px;
+            cursor: pointer;
+            background: linear-gradient(#f4dc94,#cf9f42);
+            color: #3c2a06;
+            box-shadow: 0 6px 0 #8a6420;
+            transition: transform .08s
+        }
+
+            .bigbtn:active {
+                transform: translateY(4px)
+            }
+
+        .fan {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px
+        }
+
+        .mcard {
+            width: 70px;
+            height: 100px;
+            margin: 0 -10px;
+            border-radius: 10px;
+            background: linear-gradient(165deg,#fffdf4,#eee5cc);
+            border: 1px solid #cfc3a0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 24px rgba(0,0,0,.5);
+            animation: bob 3.6s ease-in-out infinite
+        }
+
+        @keyframes bob {
+            50% {
+                transform: translateY(-7px)
+            }
+        }
+
+        .mcard b {
+            font: 900 30px Rubik,sans-serif;
+            line-height: 1
+        }
+
+        .mcard i {
+            font-style: normal;
+            font-size: 26px
+        }
+
+        .mcard.red {
+            color: #c22f38
+        }
+
+        .mcard.blk {
+            color: #232735
+        }
+
+        #roundInfo {
+            position: fixed;
+            bottom: 8px;
+            left: 8px;
+            z-index: 55;
+            display: flex;
+            gap: 8px;
+            pointer-events: none
+        }
+
+        .info-chip {
+            background: rgba(6,24,15,.7);
+            border: 1px solid rgba(240,215,140,.3);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font: 600 11px Rubik;
+            color: #bfe0c8
+        }
+
+            .info-chip b {
+                color: #ffd873;
+                font-size: 13px
+            }
+
+        .cf {
+            position: absolute;
+            top: -44px;
+            z-index: 1;
+            pointer-events: none;
+            animation: fall linear forwards
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(115vh) rotate(320deg);
+                opacity: .6
+            }
+        }
+
+        #nnPanel {
+            position: fixed;
+            right: 10px;
+            top: 54px;
+            z-index: 80;
+            background: rgba(6,24,15,.95);
+            border: 1px solid rgba(240,215,140,.3);
+            border-radius: 14px;
+            padding: 12px;
+            width: 270px;
+            font: 500 12px Rubik,sans-serif;
+            color: #efe3bd;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            max-height: calc(100vh - 70px);
+            overflow-y: auto;
+            transition: transform .3s,opacity .3s;
+            transform: translateX(0)
+        }
+
+            #nnPanel.hidden {
+                transform: translateX(300px);
+                opacity: 0;
+                pointer-events: none
+            }
+
+            #nnPanel::-webkit-scrollbar {
+                width: 4px
+            }
+
+            #nnPanel::-webkit-scrollbar-thumb {
+                background: rgba(240,215,140,.3);
+                border-radius: 2px
+            }
+
+            #nnPanel h3 {
+                font: 800 12px Rubik,sans-serif;
+                color: #ffd873;
+                margin: 0
+            }
+
+        .nn-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 1px 0
+        }
+
+            .nn-row b {
+                color: #ffd873;
+                font-size: 11px
+            }
+
+            .nn-row small {
+                color: #bfe0c8;
+                font-size: 10px
+            }
+
+        .nn-section {
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed rgba(240,215,140,.15)
+        }
+
+            .nn-section h4 {
+                font: 700 10px Rubik;
+                color: #bfe0c8;
+                margin: 0 0 3px;
+                text-transform: uppercase;
+                letter-spacing: .05em
+            }
+
+        #thinkInd {
+            font-size: 10px;
+            color: #bfe0c8;
+            min-height: 12px
+        }
+
+        .nn-btn {
+            font: 700 11px Rubik,sans-serif;
+            border: 1px solid rgba(240,215,140,.4);
+            border-radius: 7px;
+            padding: 5px 7px;
+            background: rgba(0,0,0,.3);
+            color: #efe3bd;
+            cursor: pointer;
+            transition: .15s;
+            text-align: center
+        }
+
+            .nn-btn:hover {
+                background: rgba(240,215,140,.15);
+                color: #ffd873
+            }
+
+            .nn-btn.active {
+                background: rgba(240,215,140,.2);
+                border-color: #ffd873;
+                color: #ffd873
+            }
+
+            .nn-btn.danger {
+                border-color: rgba(226,96,79,.5);
+                color: #e2604f
+            }
+
+                .nn-btn.danger:hover {
+                    background: rgba(226,96,79,.2)
+                }
+
+            .nn-btn.continuous {
+                border-color: rgba(63,158,111,.6);
+                color: #8fdcb2
+            }
+
+                .nn-btn.continuous.active {
+                    background: rgba(63,158,111,.25);
+                    border-color: #3f9e6f;
+                    color: #8fdcb2
+                }
+
+        .nn-btn-row {
+            display: flex;
+            gap: 3px
+        }
+
+            .nn-btn-row .nn-btn {
+                flex: 1
+            }
+
+        .match-box {
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed rgba(240,215,140,.15)
+        }
+
+        .match-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1px 0
+        }
+
+            .match-row b {
+                color: #ffd873;
+                font-size: 12px
+            }
+
+            .match-row small {
+                color: #bfe0c8;
+                font-size: 10px
+            }
+
+        #resetMatchBtn {
+            font: 700 9px Rubik,sans-serif;
+            border: 1px solid rgba(240,215,140,.4);
+            border-radius: 5px;
+            padding: 3px 6px;
+            background: rgba(0,0,0,.3);
+            color: #efe3bd;
+            cursor: pointer
+        }
+
+        #trainLog {
+            max-height: 90px;
+            overflow-y: auto;
+            font-size: 9px;
+            color: #8ab89a;
+            margin-top: 3px;
+            border-top: 1px dashed rgba(240,215,140,.15);
+            padding-top: 2px;
+            line-height: 1.3
+        }
+
+            #trainLog div {
+                padding: 0 0 1px
+            }
+
+            #trainLog::-webkit-scrollbar {
+                width: 3px
+            }
+
+            #trainLog::-webkit-scrollbar-thumb {
+                background: rgba(240,215,140,.3);
+                border-radius: 2px
+            }
+
+        .auto-train-lbl {
+            font-size: 10px;
+            color: #bfe0c8;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer
+        }
+
+            .auto-train-lbl input {
+                accent-color: #ffd873;
+                width: 11px;
+                height: 11px
+            }
+
+        #spectateInfo {
+            font-size: 10px;
+            color: #ffd873;
+            min-height: 12px;
+            text-align: center
+        }
+
+        #qualityBar {
+            height: 5px;
+            border-radius: 3px;
+            background: rgba(0,0,0,.4);
+            margin-top: 1px;
+            overflow: hidden
+        }
+
+        #qualityFill {
+            height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg,#e2604f,#ffd873,#3f9e6f);
+            width: 0%;
+            transition: width .5s
+        }
+
+        #lossChart {
+            display: flex;
+            align-items: flex-end;
+            gap: 1px;
+            height: 24px;
+            margin-top: 2px;
+            padding: 2px;
+            background: rgba(0,0,0,.2);
+            border-radius: 4px
+        }
+
+            #lossChart .bar {
+                flex: 1;
+                min-width: 2px;
+                background: #ffd873;
+                border-radius: 1px 1px 0 0;
+                transition: height .3s
+            }
+
+        #contStats {
+            font-size: 10px;
+            color: #8fdcb2;
+            min-height: 12px;
+            text-align: center
+        }
+
+        #importFileInput {
+            display: none
+        }
+
+        @media(max-width:700px) {
+            #nnPanel {
+                right: 6px;
+                top: 50px;
+                width: 210px;
+                padding: 8px
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="felt"></div><div id="sheen"></div><div id="frame"></div>
+    <div id="board"><div id="cards"></div><div id="deckStack"><span id="deckCount">35</span></div><div id="trumpTag" class="chip">Козырь <b id="trumpSym">♠</b></div><div id="humanPile" class="pileWrap"><span class="pileBadge human-b" id="humanPileBadge">0</span><span class="pileLbl">Ваши</span></div><div id="aiPile" class="pileWrap"><span class="pileBadge ai-b" id="aiPileBadge">0</span><span class="pileLbl">Комп</span></div></div>
+    <div id="topbar"><div id="logo"><span class="s1">♥</span><span class="s2">♠</span><span class="txt"> БУР-КОЗЁЛ · MCTS+NN</span></div><div id="score"><span class="sc-l">Вы</span><b id="scoreH">0</b><span class="sep">:</span><b id="scoreA">0</b><span class="sc-l">Комп</span></div><div id="tools"><button class="tbtn" id="menuBtn" title="Панель обучения">🧠</button><button class="tbtn" id="sndBtn">♪</button><button class="tbtn" id="helpBtn">?</button><button class="tbtn" id="newBtn">⟳</button></div></div>
+    <div id="nnPanel" class="hidden">
+        <h3>🧠 MCTS + Нейросеть</h3>
+        <div class="nn-row"><small>Статус</small><b id="nnStatus">загрузка...</b></div>
+        <div class="nn-row"><small>Параметры</small><b id="nnParams">—</b></div>
+        <div class="nn-row"><small>Loss (последний)</small><b id="nnLoss">—</b></div>
+        <div class="nn-row"><small>Loss (средний)</small><b id="nnLossAvg">—</b></div>
+        <div id="lossChart"></div>
+        <div class="nn-row"><small>Качество</small><b id="nnQuality">—</b></div>
+        <div id="qualityBar"><div id="qualityFill"></div></div>
+        <div class="nn-row"><small>Позиций обучено</small><b id="nnGames">0</b></div>
+        <div class="nn-row"><small>Буфер</small><b id="bufferSize">0</b></div>
+        <div id="thinkInd"></div>
+        <div id="spectateInfo"></div>
+        <div id="contStats"></div>
+        <div class="nn-section">
+            <h4>Обучение</h4>
+            <button class="nn-btn continuous" id="contTrainBtn">▶ Непрерывное обучение</button>
+            <div class="nn-btn-row" style="margin-top:3px">
+                <button class="nn-btn" id="spectateBtn">👁 Наблюдать</button>
+                <button class="nn-btn" id="trainNowBtn">📊 Буфер</button>
+            </div>
+            <label class="auto-train-lbl" style="margin-top:3px"><input type="checkbox" id="autoTrainChk" checked> Автообучение после игр</label>
+        </div>
+        <div class="nn-section">
+            <h4>Модель</h4>
+            <div class="nn-btn-row">
+                <button class="nn-btn" id="saveModelBtn" title="Сохранить в localStorage">💾</button>
+                <button class="nn-btn" id="loadModelBtn" title="Загрузить из localStorage">📂</button>
+                <button class="nn-btn" id="exportModelBtn" title="Экспорт в файл">📤</button>
+                <button class="nn-btn" id="importModelBtn" title="Импорт из файла">📥</button>
+                <button class="nn-btn danger" id="resetModelBtn" title="Сбросить">🗑</button>
+            </div>
+            <input type="file" id="importFileInput" accept=".json">
+        </div>
+        <div class="match-box">
+            <div class="match-row"><small>Вы</small><b id="matchH">0</b><small>ИИ</small><b id="matchA">0</b></div>
+            <button id="resetMatchBtn">СБРОС СЧЁТА</button>
+        </div>
+        <div id="trainLog"></div>
+    </div>
+    <div id="console"><div id="msg">…</div><div id="btns"><button id="leadBtn" style="display:none">ПОЙТИ</button><button id="discardBtn" style="display:none">СБРОСИТЬ</button><button id="beatBtn" style="display:none">ОТБИТЬ</button><button id="comboBtn" style="display:none">ОБЪЯВИТЬ</button></div></div>
+    <div id="toast"></div>
+    <div id="roundInfo"><div class="info-chip">Очки: Вы <b id="ptsH">0</b> : <b id="ptsA">0</b> Комп</div></div>
+    <div id="start" class="ov show">
+    <div class="ovbox">
+        
+        <div class="fan">
+            <div class="mcard red"><b>Т</b><i>♥</i></div>
+            <div class="mcard red"><b>10</b><i>♦</i></div>
+            <div class="mcard blk"><b>Т</b><i>♠</i></div>
+            <div class="mcard blk"><b>10</b><i>♣</i></div>
+        </div>
+        
+        
+        <h1>БУР-КОЗЁЛ</h1><p class="tag">Против MCTS+NN · Self-play обучение</p><ul><li>Ходите одной или несколькими одной масти</li><li>4 одной масти / 4 конца — автоход вне очереди</li><li>Нейросеть обучается через self-play и ваши игры</li><li>Кто набрал 12 штрафов — проиграл</li></ul><button class="bigbtn" id="playBtn">ИГРАТЬ</button></div>
+    </div>
+    
+    <div id="help" class="ov"><div class="ovbox"><h2>Правила</h2><ul><li>Старшинство: Т>10>К>Д>В>9>8>7>6</li><li>4 одной масти / 4 конца (Т/10) — автоход вне очереди</li><li>Очки: Т=11, 10=10, К=4, Д=3, В=2</li><li>Штрафы: победитель—0, норма(31+)—2, 1-30—4, ноль—6</li><li>Комбинации: Бура(4 козыря), Молодка(4 одной масти), Москва(3 туза)</li></ul><button class="bigbtn" id="helpClose">ПОНЯТНО</button></div></div>
+    <div id="roundEnd" class="ov"><div class="ovbox"><h1 id="reTitle"></h1><p id="reDetail" class="tag"></p><p id="reScore" style="color:#bfe0c8;font-size:14px;margin-bottom:16px"></p><p id="rePenalty" style="color:#ffd873;font-size:15px;margin-bottom:22px"></p><button class="bigbtn" id="reNextBtn">СЛЕДУЮЩИЙ РАУНД</button></div></div>
+    <div id="gameEnd" class="ov"><div class="ovbox"><h1 id="geTitle"></h1><p id="geDetail" class="tag"></p><p id="geFinal" style="color:#ffd873;font-size:16px;margin-bottom:22px"></p><button class="bigbtn" id="geNewBtn">НОВАЯ ИГРА</button></div></div>
+
+    <script>
+        'use strict';
+        const $ = s => document.querySelector(s); const sleep = ms => new Promise(r => setTimeout(r, ms)); const rnd = n => Math.floor(Math.random() * n);
+        const SUITS = ['♠', '♥', '♦', '♣']; const RANK_DISPLAY = { 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'В', 12: 'Д', 13: 'К', 14: 'Т' };
+        const isRedSuit = s => s === 1 || s === 2;
+        function cardStr(c) { if (c.rank === 14) return 9; if (c.rank === 10) return 8; if (c.rank === 13) return 7; if (c.rank === 12) return 6; if (c.rank === 11) return 5; if (c.rank === 9) return 4; if (c.rank === 8) return 3; if (c.rank === 7) return 2; return 1; }
+        function cardPoints(c) { if (c.rank === 14) return 11; if (c.rank === 10) return 10; if (c.rank === 13) return 4; if (c.rank === 12) return 3; if (c.rank === 11) return 2; return 0; }
+        function canBeatCard(a, d, tr) { if (d.suit === a.suit) return cardStr(d) > cardStr(a); return d.suit === tr && a.suit !== tr; }
+        function isEnd(c) { return c.rank === 14 || c.rank === 10; }
+
+        let NN = null, NN_READY = false, NN_GAMES = 0, NN_SAVED = false;
+        const NN_STATE_SIZE = 184, NN_ACTIONS = 16, MODEL_KEY = 'bur-kozel-nn-v1';
+        let LOSS_HISTORY = []; const LOSS_HISTORY_MAX = 20;
+        function addLoss(loss) { LOSS_HISTORY.push(loss); if (LOSS_HISTORY.length > LOSS_HISTORY_MAX) LOSS_HISTORY.shift(); updateLossDisplay(); }
+        function getAvgLoss() { if (!LOSS_HISTORY.length) return null; const r = LOSS_HISTORY.slice(-10); return r.reduce((a, b) => a + b, 0) / r.length; }
+        function updateLossDisplay() { $('#nnLossAvg').textContent = getAvgLoss() !== null ? getAvgLoss().toFixed(3) : '—'; updateQualityDisplay(getAvgLoss()); const chart = $('#lossChart'); chart.innerHTML = ''; const maxL = Math.max(...LOSS_HISTORY, 4); for (const l of LOSS_HISTORY) { const bar = document.createElement('div'); bar.className = 'bar'; bar.style.height = Math.max(2, Math.round((l / maxL) * 22)) + 'px'; bar.style.background = l < 2.5 ? '#3f9e6f' : l < 3.1 ? '#ffd873' : '#e2604f'; chart.appendChild(bar); } }
+        function createModel() { const input = tf.input({ shape: [NN_STATE_SIZE] }); let x = tf.layers.dense({ units: 256, activation: 'relu' }).apply(input); x = tf.layers.dense({ units: 256, activation: 'relu' }).apply(x); x = tf.layers.dense({ units: 128, activation: 'relu' }).apply(x); const p = tf.layers.dense({ units: NN_ACTIONS, activation: 'softmax', name: 'policy' }).apply(x); const v = tf.layers.dense({ units: 1, activation: 'tanh', name: 'value' }).apply(x); const m = tf.model({ inputs: input, outputs: [p, v] }); m.compile({ optimizer: tf.train.adam(0.001), loss: { policy: 'categoricalCrossentropy', value: 'meanSquaredError' } }); return m; }
+        function countParams(m) { let c = 0; m.layers.forEach(l => { l.getWeights().forEach(w => { c += w.size; }); }); return c; }
+        function getQualityInfo(loss) { if (loss === null) return { text: '—', pct: 0 }; if (loss > 3.5) return { text: '🔴 Хаос', pct: 5 }; if (loss > 3.1) return { text: '🔴 Хуже случайного', pct: 10 }; if (loss > 2.8) return { text: '🟡 Случайный', pct: 25 }; if (loss > 2.4) return { text: '🟡 Начало обучения', pct: 40 }; if (loss > 2.0) return { text: '🟢 Учится', pct: 55 }; if (loss > 1.5) return { text: '🟢 Средний', pct: 70 }; if (loss > 1.0) return { text: '🟢 Хороший', pct: 85 }; return { text: '🏆 Отличный', pct: 95 }; }
+        function updateQualityDisplay(loss) { const info = getQualityInfo(loss); $('#nnQuality').textContent = info.text; $('#qualityFill').style.width = info.pct + '%'; }
+        async function initNN() {
+            try { await tf.setBackend('webgl'); await tf.ready(); $('#nnStatus').textContent = 'webgl'; } catch (e) { try { await tf.setBackend('cpu'); await tf.ready(); $('#nnStatus').textContent = 'cpu'; } catch (e2) { $('#nnStatus').textContent = 'ошибка'; return; } }
+            let loaded = false; try { const m = await tf.loadLayersModel('localstorage://' + MODEL_KEY); NN = m; NN.compile({ optimizer: tf.train.adam(0.001), loss: { policy: 'categoricalCrossentropy', value: 'meanSquaredError' } }); loaded = true; NN_SAVED = true; addTrainLog('📂 Модель загружена'); } catch (e) { NN = createModel(); addTrainLog('Новая модель'); }
+            NN_READY = true; $('#nnParams').textContent = countParams(NN).toLocaleString(); $('#nnStatus').textContent = loaded ? 'загружена ✓' : 'готова ✓'; updateQualityDisplay(null);
+        }
+        async function saveModelToLS() { if (!NN_READY) return; try { await NN.save('localstorage://' + MODEL_KEY); NN_SAVED = true; addTrainLog('💾 Сохранено'); toast('Сохранено ✓'); } catch (e) { addTrainLog('❌ Ошибка сохр.'); } }
+        async function loadModelFromLS() { if (!NN_READY) return; try { const m = await tf.loadLayersModel('localstorage://' + MODEL_KEY); if (NN) NN.dispose(); NN = m; NN.compile({ optimizer: tf.train.adam(0.001), loss: { policy: 'categoricalCrossentropy', value: 'meanSquaredError' } }); NN_SAVED = true; $('#nnParams').textContent = countParams(NN).toLocaleString(); addTrainLog('📂 Загружено'); toast('Загружено ✓'); } catch (e) { toast('Нет сохранённой модели'); } }
+
+        /* ===== Single-file Export/Import ===== */
+        async function exportModelSingleFile() {
+            if (!NN_READY) return;
+            try {
+                let savedArtifacts = null;
+                await NN.save({ save: async (artifacts) => { savedArtifacts = artifacts; return { modelArtifactsInfo: { dateSaved: new Date(), modelTopologyType: 'JSON' } }; } });
+                const weightBytes = new Uint8Array(savedArtifacts.weightData);
+                let binary = ''; const chunkSize = 8192;
+                for (let i = 0; i < weightBytes.length; i += chunkSize) { binary += String.fromCharCode.apply(null, weightBytes.subarray(i, i + chunkSize)); }
+                const exportData = { format: 'bur-kozel-nn-v1', topology: savedArtifacts.modelTopology, weightSpecs: savedArtifacts.weightSpecs, weightData: btoa(binary) };
+                const json = JSON.stringify(exportData);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'bur-kozel-nn-model.json'; a.click();
+                URL.revokeObjectURL(url);
+                addTrainLog('📤 Экспорт (1 файл)'); toast('Модель экспортирована ✓');
+            } catch (e) { addTrainLog('❌ Экспорт: ' + e.message); toast('Ошибка экспорта'); }
+        }
+        async function importModelSingleFile(file) {
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                if (data.format !== 'bur-kozel-nn-v1') { toast('Неверный формат файла'); return; }
+                const binary = atob(data.weightData);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++)bytes[i] = binary.charCodeAt(i);
+                const model = await tf.loadLayersModel({ load: async () => ({ modelTopology: data.topology, weightSpecs: data.weightSpecs, weightData: bytes.buffer }) });
+                if (NN) NN.dispose();
+                NN = model; NN.compile({ optimizer: tf.train.adam(0.001), loss: { policy: 'categoricalCrossentropy', value: 'meanSquaredError' } });
+                NN_READY = true; $('#nnParams').textContent = countParams(NN).toLocaleString();
+                addTrainLog('📥 Импорт (1 файл)'); toast('Модель импортирована ✓');
+            } catch (e) { addTrainLog('❌ Импорт: ' + e.message); toast('Ошибка импорта'); }
+        }
+        function resetModel() { if (!confirm('Сбросить модель?')) return; if (NN) NN.dispose(); NN = createModel(); NN_READY = true; NN_SAVED = false; LOSS_HISTORY = []; $('#lossChart').innerHTML = ''; $('#nnParams').textContent = countParams(NN).toLocaleString(); $('#nnLoss').textContent = '—'; $('#nnLossAvg').textContent = '—'; $('#nnQuality').textContent = '—'; $('#qualityFill').style.width = '0%'; try { localStorage.removeItem('tensorflowjs_models/' + MODEL_KEY); } catch (e) { } addTrainLog('🗑 Сброшено'); toast('Сброшено'); }
+
+        function nnPredict(state) { if (!NN_READY) return { policy: new Array(NN_ACTIONS).fill(1 / NN_ACTIONS), value: 0 }; return tf.tidy(() => { const input = tf.tensor2d([Array.from(state)]); const [p, v] = NN.predict(input); return { policy: Array.from(p.dataSync()), value: v.dataSync()[0] }; }); }
+        function actionToIndex(a) { if (!a || !a.cards || !a.cards.length) return 0; return C_SUIT(a.cards[0]) * 4 + (Math.min(4, a.cards.length) - 1); }
+        function actionToKey(a) { if (!a || !a.cards) return ''; return a.cards.slice().sort((x, y) => x - y).join(','); }
+        function getPolicyPrior(nnPolicy, actions) { if (!nnPolicy || !actions.length) return actions.map(() => 1 / Math.max(1, actions.length)); const p = actions.map(a => Math.max(1e-8, nnPolicy[actionToIndex(a)] || 1e-8)); const s = p.reduce((a, b) => a + b, 0); if (s < 1e-8) return actions.map(() => 1 / actions.length); return p.map(x => x / s); }
+        let NN_TRAIN_BUFFER = [];
+        function updateBufferDisplay() { $('#bufferSize').textContent = NN_TRAIN_BUFFER.length; }
+        function addToBuffer(item) { NN_TRAIN_BUFFER.push(item); if (NN_TRAIN_BUFFER.length > 3000) NN_TRAIN_BUFFER.splice(0, NN_TRAIN_BUFFER.length - 3000); updateBufferDisplay(); }
+        function encodeStateForNN(G, side) { const v = new Float32Array(NN_STATE_SIZE); const aiIds = new Set(G.ai.hand.map(cardToId)); const played = new Set(); for (const c of G.human.trickCards) played.add(c.id); for (const c of G.ai.trickCards) played.add(c.id); if (G.currentTrick) { for (const c of G.currentTrick.attack) played.add(c.id); for (const c of G.currentTrick.defense) played.add(c.id); } let k = 0; for (let id = 0; id < 36; id++) { v[k++] = aiIds.has(id) ? 1 : 0; v[k++] = played.has(id) ? 1 : 0; v[k++] = (G.currentTrick && G.currentTrick.attack.some(c => c.id === id)) ? 1 : 0; v[k++] = (G.currentTrick && G.currentTrick.defense.some(c => c.id === id)) ? 1 : 0; v[k++] = 0; } for (let s = 0; s < 4; s++)v[k + s] = (s === G.trump) ? 1 : 0; return v; }
+        async function trainOnBuffer() { if (!NN_READY || NN_TRAIN_BUFFER.length < 10) return null; const batch = NN_TRAIN_BUFFER.slice(-64); const xs = tf.tensor2d(batch.map(b => b.state)); const pY = tf.tensor2d(batch.map(b => b.policy)); const vY = tf.tensor2d(batch.map(b => [b.value])); const result = await NN.fit(xs, [pY, vY], { epochs: 1, verbose: 0 }); NN_GAMES += batch.length; $('#nnGames').textContent = NN_GAMES; const loss = result.history.loss[0]; $('#nnLoss').textContent = loss.toFixed(3); addLoss(loss); xs.dispose(); pY.dispose(); vY.dispose(); return loss; }
+        function addTrainLog(msg) { const log = $('#trainLog'); const t = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); const d = document.createElement('div'); d.textContent = `[${t}] ${msg}`; log.insertBefore(d, log.firstChild); while (log.children.length > 25) log.removeChild(log.lastChild); }
+
+        /* ===== Continuous Training ===== */
+        let CONT_TRAINING = false, CONT_GAMES = 0, CONT_TOTAL_POS = 0, CONT_START_TIME = 0;
+        async function continuousTrainLoop() { if (!NN_READY) { toast('НН не готова'); return; } if (CONT_TRAINING) { stopContinuousTraining(); return; } CONT_TRAINING = true; CONT_GAMES = 0; CONT_TOTAL_POS = 0; CONT_START_TIME = Date.now(); $('#contTrainBtn').textContent = '⏹ Остановить'; $('#contTrainBtn').classList.add('active'); addTrainLog('▶ Непрерывное обучение'); while (CONT_TRAINING) { for (let g = 0; g < 3; g++) { if (!CONT_TRAINING) break; const result = await playSelfPlayGame(50); CONT_GAMES++; CONT_TOTAL_POS += result.trajectoryLength; const elapsed = ((Date.now() - CONT_START_TIME) / 1000).toFixed(0); $('#contStats').textContent = `Партий:${CONT_GAMES} Поз:${CONT_TOTAL_POS} ${elapsed}с`; await sleep(0); } if (!CONT_TRAINING) break; if (NN_TRAIN_BUFFER.length >= 10) { await trainOnBuffer(); } if (CONT_GAMES % 10 === 0) await saveModelToLS(); await sleep(0); } }
+        function stopContinuousTraining() { CONT_TRAINING = false; $('#contTrainBtn').textContent = '▶ Непрерывное обучение'; $('#contTrainBtn').classList.remove('active'); $('#contStats').textContent = ''; addTrainLog(`⏹ ${CONT_GAMES} партий`); saveModelToLS(); }
+
+        /* ===== MCTS ===== */
+        const C_SUIT = id => Math.floor(id / 9); const C_RANK = id => id % 9 + 6; const cStr = id => cardStr({ rank: C_RANK(id) }); const cPts = id => cardPoints({ rank: C_RANK(id) });
+        const cBeat = (a, d, tr) => { const as = C_SUIT(a), ds = C_SUIT(d); if (ds === as) return cStr(d) > cStr(a); return ds === tr && as !== tr; };
+        function removeFromArr(arr, c) { const i = arr.indexOf(c); if (i >= 0) arr.splice(i, 1); }
+        function chooseLeadSim(hand, oppLen, trump) { const mc = Math.min(4, oppLen, hand.length); const bs = {}; for (const c of hand) { const s = C_SUIT(c); if (!bs[s]) bs[s] = []; bs[s].push(c); } let best = null, bst = -Infinity; for (const s in bs) { const cards = bs[s].slice().sort((a, b) => cStr(a) - cStr(b)); const isT = (+s === trump); for (let cnt = 1; cnt <= Math.min(mc, cards.length); cnt++) { const sel = cards.slice(0, cnt); let sc = 0; const tp = sel.reduce((a, c) => a + cPts(c), 0); const st = cStr(sel[sel.length - 1]); if (isT) { if (cnt === 1 && (C_RANK(sel[0]) === 14 || C_RANK(sel[0]) === 10)) sc += 15 + tp; else sc += tp - 5; } else { if (cnt === 1) { if (C_RANK(sel[0]) === 14 || C_RANK(sel[0]) === 10) sc -= 60; else if (C_RANK(sel[0]) === 13 || C_RANK(sel[0]) === 12) sc -= 25; else sc += 2 - tp; } else { if (st >= 8) sc += 15 + tp * 2; else sc += cnt * 3 - tp; } } if (sc > bst) { bst = sc; best = sel; } } } return best && best.length ? best : [hand[0]]; }
+        function defendSim(hand, attack, trump) { const used = []; const def = []; for (const a of attack) { let bc = -1, bst = Infinity; for (const c of hand) { if (used.includes(c)) continue; if (cBeat(a, c, trump)) { const st = cStr(c) + (C_SUIT(c) === trump ? 100 : 0); if (st < bst) { bst = st; bc = c; } } } if (bc < 0) return null; used.push(bc); def.push(bc); } return def; }
+        function simulateTake(h, li, dump) { const sorted = h[li].slice().sort((a, b) => cPts(a) - cPts(b)); const dc = sorted.slice(0, Math.min(dump, sorted.length)); const ds = new Set(dc); h[li] = h[li].filter(c => !ds.has(c)); return dc; }
+        function playRestOfRound(h, dk, trump, leader, pts) { let guard = 0; while ((h[0].length > 0 || h[1].length > 0) && guard < 300) { guard++; if (h[leader].length === 0) { leader = 1 - leader; if (h[leader].length === 0) break; continue; } let ac = chooseLeadSim(h[leader], h[1 - leader].length, trump); for (const c of ac) removeFromArr(h[leader], c); const def = defendSim(h[1 - leader], ac, trump); let w; if (def) { for (const c of def) removeFromArr(h[1 - leader], c); w = 1 - leader; let tp = 0; for (const c of ac) tp += cPts(c); for (const c of def) tp += cPts(c); pts[w] += tp; } else { const dc = simulateTake(h, 1 - leader, ac.length); w = leader; let tp = 0; for (const c of ac) tp += cPts(c); for (const c of dc) tp += cPts(c); pts[w] += tp; } const order = [w, 1 - w]; for (const s of order) { while (h[s].length < 4 && dk.length > 0) h[s].push(dk.pop()); } leader = w; if (dk.length === 0 && h[0].length === 0 && h[1].length === 0) break; } return pts[1] - pts[0]; }
+        const PUCT_C = 1.5;
+        class MCTSNode { constructor(s, p, a, pr) { this.state = s; this.parent = p; this.action = a; this.prior = pr || 0; this.children = []; this.visits = 0; this.value = 0; this.untriedActions = null; } }
+        function cloneState(st) { return { aiHand: st.aiHand.slice(), humanHand: st.humanHand.slice(), deck: st.deck.slice(), trump: st.trump, trickPoints: { h: st.trickPoints.h, a: st.trickPoints.a }, phase: st.phase, attack: st.attack ? st.attack.slice() : null }; }
+        function getLeadActions(st) { const hand = st.aiHand, ol = st.humanHand.length; const mc = Math.min(4, ol, hand.length); const bs = {}; for (const c of hand) { const s = C_SUIT(c); if (!bs[s]) bs[s] = []; bs[s].push(c); } const acts = []; for (const s in bs) { const cards = bs[s].slice().sort((a, b) => cStr(a) - cStr(b)); for (let cnt = 1; cnt <= Math.min(mc, cards.length); cnt++) { acts.push({ type: 'lead', cards: cards.slice(0, cnt) }); } } return acts; }
+        function applyLeadAction(st, action) { if (!action || !action.cards) return cloneState(st); const s2 = cloneState(st); for (const c of action.cards) removeFromArr(s2.aiHand, c); s2.attack = action.cards.slice(); s2.phase = 'humanDefend'; return s2; }
+        function simulateNode(st) { const s2 = cloneState(st); if (s2.phase === 'humanDefend') { const def = defendSim(s2.humanHand, s2.attack, s2.trump); let w; if (def) { for (const c of def) removeFromArr(s2.humanHand, c); w = 'human'; let tp = 0; for (const c of s2.attack) tp += cPts(c); for (const c of def) tp += cPts(c); s2.trickPoints.h += tp; } else { const dc = simulateTake([s2.humanHand], 0, s2.attack.length); w = 'ai'; let tp = 0; for (const c of s2.attack) tp += cPts(c); for (const c of dc) tp += cPts(c); s2.trickPoints.a += tp; } s2.attack = null; s2.phase = w === 'human' ? 'humanLead' : 'aiLead'; } const h = [s2.humanHand, s2.aiHand]; const pts = [s2.trickPoints.h, s2.trickPoints.a]; return playRestOfRound(h, s2.deck, s2.trump, s2.phase === 'aiLead' ? 1 : 0, pts); }
+        function mctsSearch(rootState, iterations, nnState) { const root = new MCTSNode(rootState, null, null, 1.0); root.untriedActions = getLeadActions(rootState); const rpm = new Map(); if (NN_READY && nnState) { const nr = nnPredict(nnState); const pr = getPolicyPrior(nr.policy, root.untriedActions); for (let i = 0; i < root.untriedActions.length; i++)rpm.set(actionToKey(root.untriedActions[i]), pr[i]); } for (let i = 0; i < iterations; i++) { let node = root; while (node.children.length > 0 && (node.untriedActions === null || node.untriedActions.length === 0)) { let bc = null, bst = -Infinity; for (const ch of node.children) { const Q = ch.visits > 0 ? ch.value / ch.visits : 0; const U = PUCT_C * ch.prior * Math.sqrt(node.visits) / (1 + ch.visits); const sc = Q + U; if (sc > bst) { bst = sc; bc = ch; } } node = bc; } if (node.untriedActions && node.untriedActions.length > 0) { let ai, pr; if (node === root && rpm.size > 0) { const cp = node.untriedActions.map(a => rpm.get(actionToKey(a)) || 1e-8); const s = cp.reduce((a, b) => a + b, 0); let r = Math.random() * s, cum = 0; ai = 0; for (let w = 0; w < cp.length; w++) { cum += cp[w]; if (r <= cum) { ai = w; break; } } pr = cp[ai]; } else { ai = rnd(node.untriedActions.length); pr = 1.0 / Math.max(1, node.untriedActions.length); } const action = node.untriedActions.splice(ai, 1)[0]; if (!action) continue; const ns = applyLeadAction(node.state, action); const child = new MCTSNode(ns, node, action, pr); node.children.push(child); node = child; } const result = simulateNode(node.state); while (node !== null) { node.visits++; node.value += result; node = node.parent; } } let bc = null, bv = -1; for (const ch of root.children) { if (ch.visits > bv) { bv = ch.visits; bc = ch; } } return bc ? bc.action : null; }
+        function getUnseenIds() { const all = []; for (let s = 0; s < 4; s++)for (let r = 6; r <= 14; r++)all.push(s * 9 + (r - 6)); const aiIds = new Set(G.ai.hand.map(cardToId)); const played = new Set(); for (const c of G.human.trickCards) played.add(c.id); for (const c of G.ai.trickCards) played.add(c.id); if (G.currentTrick) { for (const c of G.currentTrick.attack) played.add(c.id); for (const c of G.currentTrick.defense) played.add(c.id); } return all.filter(id => !aiIds.has(id) && !played.has(id)); }
+        function sampleOpponentHand() { const u = getUnseenIds(); shuffle(u); return u.slice(0, G.human.hand.length); }
+        function detChooseLead(iterations) { const aiH = G.ai.hand.map(cardToId); const agg = {}; const nd = 4; const nnS = encodeStateForNN(G, 'ai'); for (let d = 0; d < nd; d++) { const hH = sampleOpponentHand(); const hS = new Set(hH); const u = getUnseenIds(); const dk = u.filter(id => !hS.has(id)); const rs = { aiHand: aiH, humanHand: hH, deck: dk, trump: G.trump, trickPoints: { h: G.human.trickPoints, a: G.ai.trickPoints }, phase: 'aiLead', attack: null }; const a = mctsSearch(rs, Math.max(20, Math.floor(iterations / nd)), nnS); if (a) { const k = a.cards.slice().sort((x, y) => x - y).join(','); agg[k] = (agg[k] || 0) + 1; } } let bk = null, bc = -1; for (const k in agg) { if (agg[k] > bc) { bc = agg[k]; bk = k; } } if (!bk) return G.ai.hand.length ? [G.ai.hand[0]] : []; const ids = bk.split(',').map(Number); return ids.map(id => G.ai.hand.find(c => cardToId(c) === id)).filter(Boolean); }
+        function detChooseDefend(attackIds, iterations) { const aiH = G.ai.hand.map(cardToId); const dO = findDefendOptions(aiH, attackIds, G.trump); if (dO.length === 0) return null; const nd = 4; const agg = {}; for (let d = 0; d < nd; d++) { const hH = sampleOpponentHand(); const hS = new Set(hH); const u = getUnseenIds(); const dk = u.filter(id => !hS.has(id)); let bD = null, bV = -Infinity; for (const def of dO) { const rs = { aiHand: aiH.filter(c => !def.includes(c)), humanHand: hH, deck: dk, trump: G.trump, trickPoints: { h: G.human.trickPoints, a: G.ai.trickPoints }, phase: 'aiLead', attack: null }; const v = simulateNode(rs); if (v > bV) { bV = v; bD = def; } } if (bD) { const k = bD.slice().sort((a, b) => a - b).join(','); agg[k] = (agg[k] || 0) + 1; } } let bk = null, bc = -1; for (const k in agg) { if (agg[k] > bc) { bc = agg[k]; bk = k; } } if (!bk) return null; const ids = bk.split(',').map(Number); return ids.map(id => G.ai.hand.find(c => cardToId(c) === id)).filter(Boolean); }
+        function findDefendOptions(hand, attack, trump) { const res = []; const used = []; function rec(idx, ch) { if (idx === attack.length) { res.push(ch.slice()); return; } const a = attack[idx]; for (const c of hand) { if (used.includes(c)) continue; if (cBeat(a, c, trump)) { used.push(c); ch.push(c); rec(idx + 1, ch); ch.pop(); used.pop(); } } } rec(0, []); return res; }
+
+        /* ===== Spectate ===== */
+        let SPECTATING = false, SPECTATE_DELAY = 700, SPECTATE_TIMER = null, SPECTATE_ROUND = 0;
+        function getSpectateUnseenIds(side) { const all = []; for (let s = 0; s < 4; s++)for (let r = 6; r <= 14; r++)all.push(s * 9 + (r - 6)); const myIds = new Set(G[side].hand.map(cardToId)); const played = new Set(); for (const c of G.human.trickCards) played.add(c.id); for (const c of G.ai.trickCards) played.add(c.id); if (G.currentTrick) { for (const c of G.currentTrick.attack) played.add(c.id); for (const c of G.currentTrick.defense) played.add(c.id); } return all.filter(id => !myIds.has(id) && !played.has(id)); }
+        function spectateChooseLead(side, iters) { const myH = G[side].hand.map(cardToId); const opp = side === 'human' ? 'ai' : 'human'; const nd = 3; const agg = {}; for (let d = 0; d < nd; d++) { const u = getSpectateUnseenIds(side); shuffle(u); const oH = u.slice(0, G[opp].hand.length); const dk = u.slice(G[opp].hand.length); const rs = { aiHand: myH.slice(), humanHand: oH, deck: dk, trump: G.trump, trickPoints: { h: side === 'human' ? G.ai.trickPoints : G.human.trickPoints, a: side === 'human' ? G.human.trickPoints : G.ai.trickPoints }, phase: 'aiLead', attack: null }; const a = mctsSearch(rs, Math.max(15, Math.floor(iters / nd)), null); if (a) { const k = a.cards.slice().sort((x, y) => x - y).join(','); agg[k] = (agg[k] || 0) + 1; } } let bk = null, bc = -1; for (const k in agg) { if (agg[k] > bc) { bc = agg[k]; bk = k; } } if (!bk) return G[side].hand.length ? [G[side].hand[0]] : []; const ids = bk.split(',').map(Number); return ids.map(id => G[side].hand.find(c => cardToId(c) === id)).filter(Boolean); }
+        function spectateChooseDefend(side, atkIds, iters) { const myH = G[side].hand.map(cardToId); const dO = findDefendOptions(myH, atkIds, G.trump); if (dO.length === 0) return null; const opp = side === 'human' ? 'ai' : 'human'; const nd = 3; const agg = {}; for (let d = 0; d < nd; d++) { const u = getSpectateUnseenIds(side); shuffle(u); const oH = u.slice(0, G[opp].hand.length); const dk = u.slice(G[opp].hand.length); let bD = null, bV = -Infinity; for (const def of dO) { const rs = { aiHand: myH.filter(c => !def.includes(c)), humanHand: oH, deck: dk, trump: G.trump, trickPoints: { h: side === 'human' ? G.ai.trickPoints : G.human.trickPoints, a: side === 'human' ? G.human.trickPoints : G.ai.trickPoints }, phase: 'aiLead', attack: null }; const v = simulateNode(rs); if (v > bV) { bV = v; bD = def; } } if (bD) { const k = bD.slice().sort((a, b) => a - b).join(','); agg[k] = (agg[k] || 0) + 1; } } let bk = null, bc = -1; for (const k in agg) { if (agg[k] > bc) { bc = agg[k]; bk = k; } } if (!bk) return null; const ids = bk.split(',').map(Number); return ids.map(id => G[side].hand.find(c => cardToId(c) === id)).filter(Boolean); }
+        function scheduleSpectateMove() { if (!SPECTATING || !G || G.busy || G.over) return; clearTimeout(SPECTATE_TIMER); SPECTATE_TIMER = setTimeout(() => { if (!SPECTATING || !G || G.busy || G.over) return; if (G.phase === 'humanLead') spectateHumanLead(); else if (G.phase === 'humanDefend') spectateHumanDefend(); }, SPECTATE_DELAY); }
+        function spectateHumanLead() { if (!SPECTATING || !G || G.phase !== 'humanLead' || G.busy) return; $('#spectateInfo').textContent = '🤖 ИИ-1...'; setTimeout(() => { if (!SPECTATING || !G || G.over) return; const cards = spectateChooseLead('human', 200); $('#spectateInfo').textContent = ''; if (!cards || !cards.length) { G.busy = false; return; } G.busy = true; const seq = G.seq, t = G.currentTrick; for (const c of cards) { rmHand('human', c); t.attack.push(c); } handLayout('human'); layoutTable(); snd('play'); setTimeout(() => { if (seq !== G.seq) return; G.phase = 'aiDefend'; G.busy = false; schedAI(); refreshUI(); }, 400); }, 300); }
+        function spectateHumanDefend() { if (!SPECTATING || !G || G.phase !== 'humanDefend' || G.busy) return; $('#spectateInfo').textContent = '🤖 ИИ-1 защ...'; setTimeout(() => { if (!SPECTATING || !G || G.over) return; const t = G.currentTrick, atk = t.attack; if (!atk || !atk.length) { $('#spectateInfo').textContent = ''; return; } const atkIds = atk.map(cardToId); const dC = spectateChooseDefend('human', atkIds, 200); $('#spectateInfo').textContent = ''; G.busy = true; const seq = G.seq; if (dC && dC.length) { for (const c of dC) { rmHand('human', c); t.defense.push(c); } handLayout('human'); layoutTable(); snd('play'); setTimeout(() => { if (seq !== G.seq) return; resolveTrick('human'); }, 400); } else { const N = atk.length; const sorted = [...G.human.hand].sort((a, b) => cardPoints(a) - cardPoints(b)); const disc = sorted.slice(0, Math.min(N, sorted.length)); for (const c of disc) { rmHand('human', c); t.defense.push(c); } handLayout('human'); layoutTable(); snd('discard'); setTimeout(() => { if (seq !== G.seq) return; resolveTrick('ai'); }, 400); } }, 300); }
+        function startSpectate() { SPECTATING = true; SPECTATE_ROUND = 0; $('#spectateBtn').textContent = '⏹ Стоп'; $('#spectateBtn').classList.add('active'); $('#start').classList.remove('show'); addTrainLog('👁 Наблюдение'); newGame(); }
+        function stopSpectate() { SPECTATING = false; clearTimeout(SPECTATE_TIMER); $('#spectateBtn').textContent = '👁 Наблюдать'; $('#spectateBtn').classList.remove('active'); $('#spectateInfo').textContent = ''; if (G) G.over = true; $('#start').classList.add('show'); }
+        function endRoundSpectate() { SPECTATE_ROUND++; collectRoundTrainingData(); if (PEN.h >= 12 || PEN.a >= 12) { if (NN_TRAIN_BUFFER.length >= 32 && $('#autoTrainChk').checked) { trainOnBuffer().then(l => { if (l !== null) addTrainLog(`Авто: ${l.toFixed(3)}`); }); } setTimeout(() => { if (SPECTATING) { PEN = { h: 0, a: 0 }; savePen(); updPen(); startRound(); } }, 2000); } else { setTimeout(() => { if (SPECTATING) startRound(); }, 1200); } }
+        function collectRoundTrainingData() { if (!NN_READY || !G) return; const w = G.human.trickPoints > G.ai.trickPoints ? 'human' : G.ai.trickPoints > G.human.trickPoints ? 'ai' : null; for (const side of ['human', 'ai']) { try { const st = encodeStateForNN(G, side); const pt = new Array(NN_ACTIONS).fill(1 / NN_ACTIONS); const v = w ? (side === w ? 1 : -1) : 0; addToBuffer({ state: Array.from(st), policy: pt, value: v }); } catch (e) { } } }
+        let HUMAN_GAME_TRAJECTORY = [];
+        function recordHumanGameState(side) { if (!NN_READY || SPECTATING) return; try { const st = encodeStateForNN(G, side); HUMAN_GAME_TRAJECTORY.push({ state: Array.from(st), side }); } catch (e) { } }
+        function finalizeHumanGameTraining() { if (SPECTATING || HUMAN_GAME_TRAJECTORY.length === 0) return; const w = G.human.trickPoints > G.ai.trickPoints ? 'human' : G.ai.trickPoints > G.human.trickPoints ? 'ai' : null; for (const s of HUMAN_GAME_TRAJECTORY) { s.policy = new Array(NN_ACTIONS).fill(1 / NN_ACTIONS); s.value = w ? (s.side === w ? 1 : -1) : 0; addToBuffer(s); } addTrainLog(`Игра: +${HUMAN_GAME_TRAJECTORY.length} поз.`); HUMAN_GAME_TRAJECTORY = []; if (NN_TRAIN_BUFFER.length >= 32 && $('#autoTrainChk').checked) { trainOnBuffer().then(l => { if (l !== null) { addTrainLog(`Авто: ${l.toFixed(3)}`); saveModelToLS(); } }); } }
+
+        /* ===== Self-play game ===== */
+        function encodeSimState(sim, side) { const v = new Float32Array(NN_STATE_SIZE); let k = 0; const sh = new Set(sim.hands[side]); const played = new Set(); if (sim.currentTrick) { for (const c of sim.currentTrick.attack) played.add(c); for (const c of sim.currentTrick.defense) played.add(c); } for (let id = 0; id < 36; id++) { v[k++] = sh.has(id) ? 1 : 0; v[k++] = played.has(id) ? 1 : 0; v[k++] = (sim.currentTrick && sim.currentTrick.attack.includes(id)) ? 1 : 0; v[k++] = (sim.currentTrick && sim.currentTrick.defense.includes(id)) ? 1 : 0; v[k++] = 0; } for (let s = 0; s < 4; s++)v[k + s] = (s === sim.trump) ? 1 : 0; return v; }
+        function finishSimTrick(sim, w) { const t = sim.currentTrick; let p = 0; for (const c of t.attack) p += cPts(c); for (const c of t.defense) p += cPts(c); sim.trickPoints[w] += p; sim.currentTrick = null; sim.leader = w; const order = [w, 1 - w]; for (const s of order) { while (sim.hands[s].length < 4 && sim.deck.length > 0) sim.hands[s].push(sim.deck.pop()); } }
+        async function runMCTSForSP(sim, side, maxIt, nnS) { const rs = { aiHand: sim.hands[side].slice(), humanHand: sim.hands[1 - side].slice(), deck: sim.deck.slice(), trump: sim.trump, trickPoints: { h: sim.trickPoints[1 - side], a: sim.trickPoints[side] }, phase: 'aiLead', attack: null }; const root = new MCTSNode(rs, null, null, 1.0); root.untriedActions = getLeadActions(rs); const acts = root.untriedActions.slice(); if (acts.length === 0) return { action: null, visits: [], actions: [] }; const rpm = new Map(); if (NN_READY && nnS) { const nr = nnPredict(nnS); const pr = getPolicyPrior(nr.policy, root.untriedActions); for (let i = 0; i < root.untriedActions.length; i++)rpm.set(actionToKey(root.untriedActions[i]), pr[i]); } for (let i = 0; i < maxIt; i++) { let node = root; while (node.children.length > 0 && (node.untriedActions === null || node.untriedActions.length === 0)) { let bc = null, bst = -Infinity; for (const ch of node.children) { const Q = ch.visits > 0 ? ch.value / ch.visits : 0; const U = PUCT_C * ch.prior * Math.sqrt(node.visits) / (1 + ch.visits); const sc = Q + U; if (sc > bst) { bst = sc; bc = ch; } } node = bc; } if (node.untriedActions && node.untriedActions.length > 0) { let ai, pr; if (node === root && rpm.size > 0) { const cp = node.untriedActions.map(a => rpm.get(actionToKey(a)) || 1e-8); const s = cp.reduce((a, b) => a + b, 0); let r = Math.random() * s, cum = 0; ai = 0; for (let w = 0; w < cp.length; w++) { cum += cp[w]; if (r <= cum) { ai = w; break; } } pr = cp[ai]; } else { ai = rnd(node.untriedActions.length); pr = 1.0 / Math.max(1, node.untriedActions.length); } const action = node.untriedActions.splice(ai, 1)[0]; if (!action) continue; const ns = applyLeadAction(node.state, action); const child = new MCTSNode(ns, node, action, pr); node.children.push(child); node = child; } const result = simulateNode(node.state); while (node !== null) { node.visits++; node.value += result; node = node.parent; } } const visits = new Array(acts.length).fill(0); for (let i = 0; i < root.children.length; i++) { const ca = root.children[i].action; for (let j = 0; j < acts.length; j++) { if (actionToKey(acts[j]) === actionToKey(ca)) { visits[j] = root.children[i].visits; break; } } } let bi = 0, bv = -1; for (let i = 0; i < visits.length; i++) { if (visits[i] > bv) { bv = visits[i]; bi = i; } } return { action: acts[bi], visits, actions: acts }; }
+        async function playSelfPlayGame(maxIt = 50) { const traj = []; let sim = { hands: [[], []], deck: [], trump: 0, trickPoints: [0, 0], currentTrick: null, leader: rnd(2), phase: 'lead' }; let cards = []; for (let s = 0; s < 4; s++)for (let r = 6; r <= 14; r++)cards.push(s * 9 + (r - 6)); shuffle(cards); sim.trump = C_SUIT(cards[0]); sim.deck = cards.slice(8); sim.hands[0] = cards.slice(0, 4); sim.hands[1] = cards.slice(4, 8); let guard = 0; while (guard++ < 200) { if (sim.hands[0].length === 0 && sim.hands[1].length === 0 && sim.deck.length === 0) break; if (!sim.currentTrick) { const l = sim.leader; const nnS = encodeSimState(sim, l); const { action, visits, actions } = await runMCTSForSP(sim, l, maxIt, nnS); if (!action || actions.length === 0) break; const pt = new Array(NN_ACTIONS).fill(0); const tv = visits.reduce((a, b) => a + b, 0); if (tv > 0) { for (let i = 0; i < actions.length; i++) { pt[actionToIndex(actions[i])] = visits[i] / tv; } } traj.push({ state: Array.from(nnS), policy: pt, side: l }); for (const c of action.cards) removeFromArr(sim.hands[l], c); sim.currentTrick = { attack: action.cards.slice(), defense: [], attacker: l, defender: 1 - l }; await sleep(0); } else if (sim.currentTrick.defense.length === 0) { const d = sim.currentTrick.defender; const atk = sim.currentTrick.attack; const dO = findDefendOptions(sim.hands[d], atk, sim.trump); if (dO.length > 0) { let bD = dO[0], bP = Infinity; for (const def of dO) { let p = 0; for (const c of atk) p += cPts(c); for (const c of def) p += cPts(c); if (p < bP) { bP = p; bD = def; } } for (const c of bD) removeFromArr(sim.hands[d], c); sim.currentTrick.defense = bD; finishSimTrick(sim, d); } else { const sorted = sim.hands[d].slice().sort((a, b) => cPts(a) - cPts(b)); const disc = sorted.slice(0, atk.length); for (const c of disc) removeFromArr(sim.hands[d], c); sim.currentTrick.defense = disc; finishSimTrick(sim, sim.currentTrick.attacker); } await sleep(0); } } let w; if (sim.trickPoints[0] > sim.trickPoints[1]) w = 0; else if (sim.trickPoints[1] > sim.trickPoints[0]) w = 1; else w = -1; for (const s of traj) { s.value = w === -1 ? 0 : (s.side === w ? 1 : -1); addToBuffer(s); } NN_GAMES++; $('#nnGames').textContent = NN_GAMES; return { winner: w, trajectoryLength: traj.length, points: sim.trickPoints.slice() }; }
+
+        /* ===== Game UI ===== */
+        const M = { w: 0, h: 0, cw: 80, ch: 114, hdr: 46 };
+        function measure() { M.w = innerWidth; M.h = innerHeight; M.hdr = 46; const raw = Math.min(M.w * .16, M.h * .145); M.cw = Math.round(Math.min(Math.max(raw, 56), 96)); M.ch = Math.round(M.cw * 1.42); document.documentElement.style.setProperty('--cw', M.cw + 'px'); document.documentElement.style.setProperty('--ch', M.ch + 'px'); if (G) layoutAll(); }
+        const deckPos = () => ({ x: 16, y: M.hdr + 16 }); const tableCY = () => Math.round((M.hdr + 12 + M.ch + M.h - M.ch - 12) / 2 - M.ch / 2); const tableCX = () => Math.round((M.w - M.cw) / 2); const hPilePos = () => ({ x: M.w - M.cw - 16, y: M.h - M.ch - 160 }); const aPilePos = () => ({ x: M.w - M.cw - 16, y: M.hdr + 16 });
+        function placeCard(c, x, y, rot, up, z) { const s = c.el.style; s.transform = `translate(${x}px,${y}px) rotate(${rot || 0}deg)`; if (z !== undefined) s.zIndex = z; if (up !== undefined && up !== c.up) { c.up = up; c.el.classList.toggle('up', up); } }
+        function appearCard(c, x, y) { const el = c.el; el.classList.add('noanim'); el.classList.remove('selected', 'canBeat', 'bad'); el.style.opacity = 1; el.style.zIndex = 25; el.style.transform = `translate(${x}px,${y}px) scale(.6)`; c.up = false; el.classList.remove('up'); void el.offsetWidth; el.classList.remove('noanim'); }
+        function handLayout(side) { if (!G) return; const h = G[side].hand, n = h.length; if (!n) return; const base = side === 'human' ? M.h - M.ch - 12 : M.hdr + 10; const maxW = M.w * .96 - M.cw; const sp = n > 1 ? Math.min(M.cw * (side === 'human' ? .7 : .55), maxW / (n - 1)) : 0; const total = sp * (n - 1) + M.cw, x0 = (M.w - total) / 2; const faceUp = SPECTATING ? true : (side === 'human'); h.forEach((c, i) => { const t = n > 1 ? i / (n - 1) - .5 : 0; placeCard(c, x0 + i * sp, side === 'human' ? base - (1 - Math.abs(t * 2)) * 6 : base + (1 - Math.abs(t * 2)) * 5, t * Math.min(16, 3 + n * 1.8) * (side === 'human' ? 1 : -1), faceUp, 30 + i); c.el.classList.toggle('mine', side === 'human' && !G.over && !SPECTATING); }); }
+        function layoutDeckUI() { if (!G) return; $('#deckStack').style.display = G.deck.length > 1 ? 'block' : 'none'; $('#deckCount').textContent = G.deck.length > 1 ? G.deck.length : 0; }
+        function layoutPilesUI() { if (!G) return; $('#humanPileBadge').style.display = G.human.trickCards.length ? 'flex' : 'none'; $('#humanPileBadge').textContent = G.human.trickCards.length; $('#aiPileBadge').style.display = G.ai.trickCards.length ? 'flex' : 'none'; $('#aiPileBadge').textContent = G.ai.trickCards.length; }
+        function placeChips() { const dp = deckPos(); $('#deckStack').style.transform = `translate(${dp.x}px,${dp.y}px)`; $('#trumpTag').style.transform = `translate(${dp.x}px,${dp.y + M.ch + 16}px)`; const hp = hPilePos(), ap = aPilePos(); $('#humanPile').style.transform = `translate(${hp.x}px,${hp.y}px)`; $('#aiPile').style.transform = `translate(${ap.x}px,${ap.y}px)`; }
+        function layoutTable() { if (!G || !G.currentTrick) return; const t = G.currentTrick, cx = tableCX(), cy = tableCY(); if (t.attack.length) { const n = t.attack.length, sp = M.cw * .8, x0 = cx - ((sp * (n - 1) + M.cw) / 2 - M.cw / 2); t.attack.forEach((c, i) => placeCard(c, x0 + i * sp, cy - 10, i % 2 ? -3 : 3, true, 20 + i)); } if (t.defense.length) { const n = t.defense.length, sp = M.cw * .8, x0 = cx - ((sp * (n - 1) + M.cw) / 2 - M.cw / 2); t.defense.forEach((c, i) => placeCard(c, x0 + i * sp, cy + M.ch * .35, i % 2 ? 3 : -3, true, 25 + i)); } }
+        function layoutAll() { if (!G) return; handLayout('human'); handLayout('ai'); layoutDeckUI(); layoutPilesUI(); placeChips(); layoutTable(); $('#console').style.bottom = (M.ch + 28) + 'px'; }
+        let G = null, AI_T = null, muted = false, toastT = null; const CARDS = new Map();
+        let PEN = { h: 0, a: 0 }; try { const s = JSON.parse(localStorage.getItem('burPen')); if (s) PEN = s; } catch (e) { }
+        function savePen() { try { localStorage.setItem('burPen', JSON.stringify(PEN)); } catch (e) { } }
+        let NEXT_L = 'human';
+        function updPen(fl) { $('#scoreH').textContent = PEN.h; $('#scoreA').textContent = PEN.a; savePen(); if (fl) { const e = $('#score'); e.classList.remove('flash'); void e.offsetWidth; e.classList.add('flash'); } }
+        function updPts() { if (!G) return; $('#ptsH').textContent = G.human.trickPoints || 0; $('#ptsA').textContent = G.ai.trickPoints || 0; }
+        let AC = null; function resumeAudio() { try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC && AC.state === 'suspended') AC.resume(); } catch (e) { } }
+        function tone(f, d, t, g, dl) { if (muted || !AC) return; const tt = AC.currentTime + (dl || 0), o = AC.createOscillator(), v = AC.createGain(); o.type = t || 'sine'; o.frequency.value = f; v.gain.setValueAtTime(.0001, tt); v.gain.linearRampToValueAtTime(g || .12, tt + .008); v.gain.exponentialRampToValueAtTime(.001, tt + d); o.connect(v); v.connect(AC.destination); o.start(tt); o.stop(tt + d + .05); }
+        function snd(n) { resumeAudio(); if (!AC || muted) return; switch (n) { case 'deal': tone(520, .07, 'triangle', .06); break; case 'sel': tone(700, .05, 'sine', .05); break; case 'play': tone(340, .06, 'triangle', .12); tone(560, .05, 'sine', .06, .02); break; case 'trick': tone(660, .12, 'sine', .12); tone(880, .2, 'sine', .12, .1); break; case 'discard': tone(190, .07, 'triangle', .07); break; case 'combo': tone(440, .15, 'triangle', .15); tone(660, .15, 'triangle', .15, .15); tone(880, .15, 'triangle', .15, .3); break; case 'win': [523, 659, 784, 1047].forEach((f, i) => tone(f, .22, 'triangle', .12, i * .13)); break; case 'lose': [392, 330, 262, 196].forEach((f, i) => tone(f, .3, 'triangle', .1, i * .16)); break; case 'bad': tone(140, .12, 'square', .06); break; } }
+        function makeCardEl(c) { const el = document.createElement('div'); el.className = 'card ' + (isRedSuit(c.suit) ? 'red' : 'black'); el.dataset.id = c.id; const r = RANK_DISPLAY[c.rank], s = SUITS[c.suit], p = cardPoints(c); const mid = c.rank >= 11 ? `<span class="court">${r}</span><span class="pipsm">${s}</span>` : `<span class="pip">${s}</span>`; el.innerHTML = `<div class="lift"><div class="inner"><div class="face back"></div><div class="face front"><div class="ci tl"><b>${r}</b><i>${s}</i></div><div class="mid">${mid}</div><div class="ci br"><b>${r}</b><i>${s}</i></div>${p > 0 ? `<div class="pts">${p}</div>` : ''}</div></div></div>`; return el; }
+        function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1);[a[i], a[j]] = [a[j], a[i]]; } }
+        function cardToId(c) { return c.suit * 9 + (c.rank - 6); }
+        function newGame() { clearTimeout(AI_T); PEN = { h: 0, a: 0 }; savePen(); updPen(); HUMAN_GAME_TRAJECTORY = []; startRound(); }
+        function startRound() { const seq = (G && G.seq || 0) + 1; G = { seq, deck: [], trump: 0, human: { hand: [], trickPoints: 0, trickCards: [] }, ai: { hand: [], trickPoints: 0, trickCards: [] }, currentTrick: null, leader: NEXT_L, phase: 'idle', over: false, busy: false, selected: [], comboToAnnounce: null }; CARDS.clear(); document.querySelectorAll('#cards .card').forEach(e => e.remove()); let id = 0; for (let s = 0; s < 4; s++)for (let r = 6; r <= 14; r++) { const c = { id, suit: s, rank: r, up: false, el: null }; c.el = makeCardEl(c); CARDS.set(id, c); G.deck.push(c); id++; } shuffle(G.deck); G.trump = G.deck[0].suit; const ts = $('#trumpSym'); ts.textContent = SUITS[G.trump]; ts.className = isRedSuit(G.trump) ? 'red-t' : 'blk-t'; G.deck.forEach(c => { c.el.style.opacity = 0; $('#cards').appendChild(c.el); }); $('#roundEnd').classList.remove('show'); $('#gameEnd').classList.remove('show'); measure(); updPts(); layoutPilesUI(); deal(); }
+        async function deal() { const seq = G.seq; G.phase = 'deal'; refreshUI(); for (let r = 0; r < 4; r++)for (const side of ['human', 'ai']) { if (seq !== G.seq || G.deck.length === 0) return; const c = G.deck.pop(); G[side].hand.push(c); appearCard(c, deckPos().x, deckPos().y); layoutDeckUI(); await sleep(30); sortHand(side); handLayout(side); snd('deal'); await sleep(100); } if (seq !== G.seq) return; sortHand('human'); sortHand('ai'); handLayout('human'); handLayout('ai'); await sleep(300); checkCombos(); }
+        function sortHand(s) { G[s].hand.sort((a, b) => { const at = a.suit === G.trump, bt = b.suit === G.trump; if (at !== bt) return at ? 1 : -1; return cardStr(b) - cardStr(a) || a.suit - b.suit; }); }
+        function checkCombos() { const hc = detectCombo(G.human.hand), ac = detectCombo(G.ai.hand); if (hc || ac) { G.phase = 'combo'; if (SPECTATING) { if (hc && ac) { const w = compareCombos(hc, ac) === 'human' ? 'human' : 'ai'; setTimeout(() => resolveComboWin(w, w === 'human' ? hc : ac), 500); } else if (hc) setTimeout(() => resolveComboWin('human', hc), 500); else setTimeout(() => resolveComboWin('ai', ac), 500); } else { if (hc && ac) resolveComboWin(compareCombos(hc, ac) === 'human' ? 'human' : 'ai', hc); else if (hc) showCombo('human', hc); else showCombo('ai', ac); } } else startPlay(); }
+        function detectCombo(h) { if (h.length < 3) return null; const tr = h.filter(c => c.suit === G.trump); if (tr.length === 4) return { type: 'bura' }; const suits = {}; h.forEach(c => { if (c.suit !== G.trump) { if (!suits[c.suit]) suits[c.suit] = []; suits[c.suit].push(c); } }); for (const s in suits) if (suits[s].length === 4) return { type: 'molodka' }; if (h.filter(c => c.rank === 14).length >= 3) return { type: 'moscow' }; return null; }
+        function compareCombos(a, b) { const p = { bura: 3, molodka: 2, moscow: 1 }; return p[a.type] >= p[b.type] ? 'human' : 'ai'; }
+        const CN = { bura: 'БУРА', molodka: 'МОЛОДКА', moscow: 'МОСКВА' };
+        function showCombo(side, c) { if (SPECTATING) { resolveComboWin(side, c); return; } toast(`${side === 'human' ? 'У вас' : 'У компа'} ${CN[c.type]}!`); snd('combo'); if (side === 'human') { G.comboToAnnounce = c; $('#comboBtn').textContent = `ОБЪЯВИТЬ: ${CN[c.type]}`; $('#comboBtn').style.display = ''; refreshUI(); } else setTimeout(() => resolveComboWin('ai', c), 800); }
+        function resolveComboWin(w, c) { const l = w === 'human' ? 'a' : 'h'; PEN[l] += c.type === 'bura' ? 6 : 4; updPen(true); if (SPECTATING) { setTimeout(() => { if (PEN.h >= 12 || PEN.a >= 12) endRoundSpectate(); else startRound(); }, 1000); return; } setTimeout(() => { if (PEN.h >= 12 || PEN.a >= 12) endGame(); else showRoundRes(w, `${CN[c.type]}!`, 'Комбинация'); }, 600); }
+        function detectAutoPlay(h) { if (h.length < 4) return null; const bs = {}; h.forEach(c => { if (!bs[c.suit]) bs[c.suit] = []; bs[c.suit].push(c); }); for (const s in bs) if (bs[s].length === 4) return { type: 'suit', cards: [...bs[s]] }; const ends = h.filter(isEnd); if (ends.length === 4) return { type: 'ends', cards: [...ends] }; return null; }
+        function checkAutoBoth() { const hA = detectAutoPlay(G.human.hand), aA = detectAutoPlay(G.ai.hand); if (hA && aA) return { side: G.leader, auto: G.leader === 'human' ? hA : aA }; if (hA) return { side: 'human', auto: hA }; if (aA) return { side: 'ai', auto: aA }; return null; }
+        function startPlay() { G.phase = 'play'; const ar = checkAutoBoth(); if (ar) { G.currentTrick = { attack: [], defense: [], attacker: ar.side, defender: ar.side === 'human' ? 'ai' : 'human' }; execAuto(ar.side, ar.auto); return; } G.currentTrick = { attack: [], defense: [], attacker: G.leader, defender: G.leader === 'human' ? 'ai' : 'human' }; if (G.leader === 'human') { G.phase = 'humanLead'; if (SPECTATING) scheduleSpectateMove(); } else { G.phase = 'aiLead'; schedAI(); } refreshUI(); }
+        async function execAuto(side, auto) { const seq = G.seq; G.busy = true; snd('combo'); const t = G.currentTrick; for (const c of auto.cards) { rmHand(side, c); t.attack.push(c); } handLayout(side); layoutTable(); await sleep(700); if (seq !== G.seq) return; G.busy = false; if (side === 'human') { G.phase = 'aiDefend'; schedAI(); refreshUI(); } else { G.phase = 'humanDefend'; refreshUI(); hlDefense(); if (SPECTATING) scheduleSpectateMove(); } }
+        function clearSel() { if (G) G.selected = []; document.querySelectorAll('.card.selected,.card.canBeat').forEach(e => e.classList.remove('selected', 'canBeat')); $('#leadBtn').style.display = 'none'; $('#beatBtn').style.display = 'none'; $('#discardBtn').style.display = 'none'; }
+        function selCard(c) { if (!G || G.busy || G.over || SPECTATING) return; const i = G.selected.indexOf(c); if (i >= 0) { G.selected.splice(i, 1); c.el.classList.remove('selected'); } else { G.selected.push(c); c.el.classList.add('selected'); } snd('sel'); refreshUI(); }
+        function hClick(c) { if (!G || G.busy || G.over || SPECTATING) return; if (G.phase === 'humanLead') { if (G.selected.includes(c)) selCard(c); else { if (G.selected.length > 0 && c.suit !== G.selected[0].suit) { bad(c.el); toast('Одна масть!'); return; } selCard(c); } } else if (G.phase === 'humanDefend') { selCard(c); hlDefense(); } }
+        function hlDefense() { document.querySelectorAll('.card.canBeat').forEach(e => e.classList.remove('canBeat')); if (!G.currentTrick || !G.currentTrick.attack.length) return; G.human.hand.forEach(c => { for (const a of G.currentTrick.attack) { if (canBeatCard(a, c, G.trump)) { c.el.classList.add('canBeat'); break; } } }); }
+        function canDefend(sel, atk) { if (sel.length !== atk.length) return false; const used = new Set(); for (const a of atk) { let f = false; for (let i = 0; i < sel.length; i++) { if (!used.has(i) && canBeatCard(a, sel[i], G.trump)) { used.add(i); f = true; break; } } if (!f) return false; } return true; }
+        async function humanLead() { if (G.busy || !G.selected.length || SPECTATING) return; const sc = [...G.selected], suit = sc[0].suit; for (const c of sc) if (c.suit !== suit) { bad(c.el); return; } if (sc.length > G.ai.hand.length) { toast('Больше!'); bad(sc[0].el); return; } G.busy = true; const seq = G.seq; clearSel(); const t = G.currentTrick; for (const c of sc) { rmHand('human', c); t.attack.push(c); } handLayout('human'); layoutTable(); snd('play'); await sleep(400); if (seq !== G.seq) return; G.phase = 'aiDefend'; G.busy = false; schedAI(); refreshUI(); }
+        async function humanDefend() { if (G.busy || SPECTATING) return; const t = G.currentTrick; if (!t || !t.attack.length) return; if (G.selected.length !== t.attack.length) { toast(`Нужно ${t.attack.length}!`); return; } const sc = [...G.selected]; if (!canDefend(sc, t.attack)) { toast('Нельзя!'); bad(sc[0].el); return; } G.busy = true; const seq = G.seq; clearSel(); for (const c of sc) { rmHand('human', c); t.defense.push(c); } handLayout('human'); layoutTable(); snd('play'); await sleep(400); if (seq !== G.seq) return; resolveTrick('human'); }
+        async function humanDiscard() { if (G.busy || SPECTATING) return; const t = G.currentTrick; if (!t || !t.attack.length) return; const nc = t.attack.length; let td; if (G.selected.length > 0) { if (G.selected.length !== nc) { toast(`Выберите ${nc}!`); return; } td = [...G.selected]; } else { const sorted = [...G.human.hand].sort((a, b) => cardPoints(a) - cardPoints(b)); td = sorted.slice(0, nc); } G.busy = true; const seq = G.seq; clearSel(); for (const c of td) { rmHand('human', c); t.defense.push(c); } handLayout('human'); layoutTable(); snd('discard'); await sleep(400); if (seq !== G.seq) return; resolveTrick('ai'); }
+        function rmHand(s, c) { const i = G[s].hand.indexOf(c); if (i >= 0) G[s].hand.splice(i, 1); }
+        async function resolveTrick(winner) { const seq = G.seq, t = G.currentTrick, all = [...t.attack, ...t.defense]; let pts = 0; all.forEach(c => pts += cardPoints(c)); G[winner].trickPoints += pts; G[winner].trickCards.push(...all); snd('trick'); if (!SPECTATING) toast(`Взятка: ${winner === 'human' ? 'ВАША' : 'комп'} (+${pts})`); const pp = winner === 'human' ? hPilePos() : aPilePos(); let zi = 5 + G[winner].trickCards.length; for (const c of all) { placeCard(c, pp.x + rnd(8) - 4, pp.y + rnd(8) - 4, rnd(30) - 15, false, zi++); await sleep(60); if (seq !== G.seq) return; } layoutPilesUI(); updPts(); await sleep(300); if (seq !== G.seq) return; G.currentTrick = null; await drawCards(winner); if (seq !== G.seq) return; if (G.human.hand.length === 0 && G.ai.hand.length === 0) { G.busy = false; endRound(); return; } if ((G.human.hand.length === 0 || G.ai.hand.length === 0) && G.deck.length === 0) { G.busy = false; endRound(); return; } G.leader = winner; const ar = checkAutoBoth(); if (ar) { G.currentTrick = { attack: [], defense: [], attacker: ar.side, defender: ar.side === 'human' ? 'ai' : 'human' }; G.busy = false; execAuto(ar.side, ar.auto); return; } G.currentTrick = { attack: [], defense: [], attacker: winner, defender: winner === 'human' ? 'ai' : 'human' }; G.busy = false; if (winner === 'human') { G.phase = 'humanLead'; if (SPECTATING) scheduleSpectateMove(); } else { G.phase = 'aiLead'; schedAI(); } refreshUI(); }
+        async function drawCards(first) { const seq = G.seq; const order = [first, first === 'human' ? 'ai' : 'human']; let drew = true; while (drew) { drew = false; for (const side of order) { if (seq !== G.seq) return; if (G[side].hand.length < 4 && G.deck.length > 0) { const c = G.deck.pop(); G[side].hand.push(c); layoutDeckUI(); appearCard(c, deckPos().x, deckPos().y); await sleep(30); sortHand(side); handLayout(side); await sleep(80); drew = true; } } } }
+        function schedAI() { clearTimeout(AI_T); AI_T = setTimeout(() => { if (!G || G.over || G.busy) return; if (G.phase === 'aiLead') aiLead(); else if (G.phase === 'aiDefend') aiDefend(); }, 200 + rnd(200)); }
+        function aiLead() { $('#thinkInd').textContent = SPECTATING ? 'ИИ-2...' : 'ИИ думает...'; setTimeout(() => { if (!SPECTATING) recordHumanGameState('ai'); const cards = detChooseLead(SPECTATING ? 200 : 1000); $('#thinkInd').textContent = ''; if (!cards || !cards.length) { G.phase = 'humanLead'; if (SPECTATING) scheduleSpectateMove(); refreshUI(); return; } G.busy = true; const seq = G.seq, t = G.currentTrick; (async () => { for (const c of cards) { rmHand('ai', c); t.attack.push(c); } handLayout('ai'); layoutTable(); snd('play'); await sleep(500); if (seq !== G.seq) return; G.phase = 'humanDefend'; G.busy = false; refreshUI(); hlDefense(); if (SPECTATING) scheduleSpectateMove(); })(); }, 50); }
+        function aiDefend() { $('#thinkInd').textContent = SPECTATING ? 'ИИ-2 защ...' : 'ИИ думает...'; setTimeout(() => { if (!SPECTATING) recordHumanGameState('ai'); const t = G.currentTrick, atk = t.attack; if (!atk || !atk.length) { $('#thinkInd').textContent = ''; return; } const atkIds = atk.map(cardToId); const dC = detChooseDefend(atkIds, SPECTATING ? 200 : 1000); $('#thinkInd').textContent = ''; G.busy = true; const seq = G.seq; (async () => { if (dC && dC.length) { for (const c of dC) { rmHand('ai', c); t.defense.push(c); } handLayout('ai'); layoutTable(); snd('play'); await sleep(500); if (seq !== G.seq) return; resolveTrick('ai'); } else { const N = atk.length; const sorted = [...G.ai.hand].sort((a, b) => cardPoints(a) - cardPoints(b)); const disc = sorted.slice(0, Math.min(N, sorted.length)); for (const c of disc) { rmHand('ai', c); t.defense.push(c); } handLayout('ai'); layoutTable(); snd('discard'); await sleep(500); if (seq !== G.seq) return; resolveTrick('human'); } })(); }, 50); }
+        function endRound() { const hP = G.human.trickPoints, aP = G.ai.trickPoints; let hp = 0, ap = 0; if (hP === aP) { hp = 0; ap = 0; } else if (hP > aP) { hp = 0; ap = aP >= 31 ? 2 : aP > 0 ? 4 : 6; } else { ap = 0; hp = hP >= 31 ? 2 : hP > 0 ? 4 : 6; } PEN.h += hp; PEN.a += ap; updPen(true); const w = hP > aP ? 'human' : aP > hP ? 'ai' : 'draw'; NEXT_L = w === 'draw' ? G.leader : w; $('#deckStack').style.display = 'none'; if (SPECTATING) { endRoundSpectate(); return; } finalizeHumanGameTraining(); setTimeout(() => { if (PEN.h >= 12 || PEN.a >= 12) endGame(); else showRoundRes(w, w === 'human' ? 'РАУНД ВЫИГРАН!' : w === 'ai' ? 'РАУНД ПРОИГРАН' : 'НИЧЬЯ', `Вы: ${hP}(${hp}ш) | Комп: ${aP}(${ap}ш)`); }, 500); }
+        function showRoundRes(w, title, detail) { if (SPECTATING) return; $('#reTitle').textContent = title; $('#reDetail').textContent = detail; $('#reScore').textContent = `Очки: Вы ${G.human.trickPoints} — ${G.ai.trickPoints} Комп`; $('#rePenalty').textContent = `Штрафы: Вы ${PEN.h} — ${PEN.a} Комп`; $('#roundEnd').classList.add('show'); if (w === 'human') snd('win'); else if (w === 'ai') snd('lose'); }
+        function endGame() { if (SPECTATING) return; const w = PEN.h < 12 ? 'human' : 'ai'; G.over = true; if (w === 'human') MATCH.h++; else MATCH.a++; updMatch(); setTimeout(() => { if (w === 'human') { $('#geTitle').textContent = 'ПОБЕДА!'; $('#geDetail').textContent = 'Комп набрал 12!'; snd('win'); confetti(); } else { $('#geTitle').textContent = 'ПРОИГРЫШ'; $('#geDetail').textContent = 'Вы набрали 12.'; snd('lose'); } $('#geFinal').textContent = `Вы ${PEN.h}:${PEN.a} Комп · Матчи: ${MATCH.h}—${MATCH.a}`; $('#gameEnd').classList.add('show'); }, 700); }
+        function confetti() { const box = $('#gameEnd'); for (let i = 0; i < 18; i++) { const s = document.createElement('span'); s.className = 'cf'; const si = rnd(4); s.textContent = SUITS[si]; s.style.left = (2 + rnd(96)) + '%'; s.style.color = isRedSuit(si) ? '#ff6b6b' : '#f0e6c8'; s.style.fontSize = (14 + rnd(20)) + 'px'; s.style.animationDuration = (2.4 + Math.random() * 2) + 's'; s.style.animationDelay = (Math.random() * 1.2) + 's'; box.appendChild(s); setTimeout(() => s.remove(), 6500); } }
+        function refreshUI() { if (!G) return; let m = ''; if (G.phase === 'deal') m = 'Раздача…'; else if (G.over) m = 'Игра окончена'; else if (G.phase === 'combo') m = 'Комбинация!'; else if (SPECTATING) m = `👁 ИИ-1 vs ИИ-2`; else if (G.phase === 'humanLead') m = 'Ваш ход — карты одной масти'; else if (G.phase === 'humanDefend') m = 'Отбивайтесь или сбрасывайте'; else m = 'ИИ думает…'; $('#msg').textContent = m; if (SPECTATING) { $('#leadBtn').style.display = 'none'; $('#discardBtn').style.display = 'none'; $('#beatBtn').style.display = 'none'; $('#comboBtn').style.display = 'none'; return; } $('#leadBtn').style.display = (G.phase === 'humanLead' && G.selected.length > 0 && !G.busy) ? '' : 'none'; $('#discardBtn').style.display = (G.phase === 'humanDefend' && G.currentTrick && !G.busy) ? '' : 'none'; $('#beatBtn').style.display = 'none'; $('#comboBtn').style.display = (G.phase === 'combo' && G.comboToAnnounce) ? '' : 'none'; if (G.phase === 'humanDefend' && G.currentTrick && G.selected.length === G.currentTrick.attack.length && !G.busy && canDefend(G.selected, G.currentTrick.attack)) { $('#beatBtn').style.display = ''; $('#discardBtn').style.display = 'none'; } }
+        function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.remove('in'); void e.offsetWidth; e.classList.add('in'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('in'), 2000); }
+        function bad(el) { el.classList.remove('bad'); void el.offsetWidth; el.classList.add('bad'); snd('bad'); setTimeout(() => el.classList.remove('bad'), 450); }
+
+        document.addEventListener('pointerdown', e => { if (e.target.closest('button,.ov,#nnPanel')) return; resumeAudio(); const cel = e.target.closest('.card'); if (cel && G) { const c = CARDS.get(+cel.dataset.id); if (c && G.human.hand.includes(c)) { hClick(c); return; } } clearSel(); refreshUI(); });
+        document.addEventListener('contextmenu', e => { if (e.target.closest('#board')) e.preventDefault(); });
+        $('#playBtn').onclick = () => { resumeAudio(); if (SPECTATING) stopSpectate(); $('#start').classList.remove('show'); newGame(); };
+        $('#newBtn').onclick = () => { resumeAudio(); if (SPECTATING) stopSpectate(); newGame(); };
+        $('#menuBtn').onclick = () => { $('#nnPanel').classList.toggle('hidden'); $('#menuBtn').classList.toggle('active'); };
+        $('#helpBtn').onclick = () => $('#help').classList.add('show');
+        $('#helpClose').onclick = () => $('#help').classList.remove('show');
+        $('#sndBtn').onclick = () => { muted = !muted; $('#sndBtn').classList.toggle('off', muted); };
+        $('#leadBtn').onclick = () => humanLead(); $('#beatBtn').onclick = () => humanDefend(); $('#discardBtn').onclick = () => humanDiscard();
+        $('#comboBtn').onclick = () => { if (G && G.comboToAnnounce && !SPECTATING) { resolveComboWin('human', G.comboToAnnounce); G.comboToAnnounce = null; $('#comboBtn').style.display = 'none'; } };
+        $('#reNextBtn').onclick = () => { $('#roundEnd').classList.remove('show'); startRound(); };
+        $('#geNewBtn').onclick = () => { $('#gameEnd').classList.remove('show'); newGame(); };
+        $('#score').onclick = () => { if (confirm('Сбросить штрафы?')) { PEN = { h: 0, a: 0 }; updPen(); } };
+        addEventListener('resize', measure); addEventListener('orientationchange', () => setTimeout(measure, 250));
+        updPen(); measure();
+        let MATCH = { h: 0, a: 0 }; try { const s = JSON.parse(localStorage.getItem('burMatch')); if (s) MATCH = s; } catch (e) { }
+        function saveMatch() { try { localStorage.setItem('burMatch', JSON.stringify(MATCH)); } catch (e) { } }
+        function updMatch() { $('#matchH').textContent = MATCH.h; $('#matchA').textContent = MATCH.a; saveMatch(); }
+        $('#resetMatchBtn').onclick = () => { MATCH = { h: 0, a: 0 }; updMatch(); };
+        updMatch();
+        $('#contTrainBtn').onclick = () => continuousTrainLoop();
+        $('#spectateBtn').onclick = () => { if (SPECTATING) stopSpectate(); else startSpectate(); };
+        $('#trainNowBtn').onclick = async () => { if (!NN_READY) return; if (NN_TRAIN_BUFFER.length < 10) { toast('Буфер мал'); return; } const l = await trainOnBuffer(); if (l !== null) addTrainLog(`Ручное: ${l.toFixed(3)}`); };
+        $('#saveModelBtn').onclick = () => saveModelToLS();
+        $('#loadModelBtn').onclick = () => loadModelFromLS();
+        $('#exportModelBtn').onclick = () => exportModelSingleFile();
+        $('#importModelBtn').onclick = () => $('#importFileInput').click();
+        $('#importFileInput').onchange = (e) => { if (e.target.files.length > 0) importModelSingleFile(e.target.files[0]); e.target.value = ''; };
+        $('#resetModelBtn').onclick = () => resetModel();
+        initNN(); addTrainLog('Игра загружена');
+        if ('serviceWorker' in navigator && window.location.protocol !== 'file:') { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { }); }); }
+    </script>
+</body>
+</html>
