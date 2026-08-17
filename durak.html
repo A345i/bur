@@ -1139,7 +1139,19 @@
         let NN_TRAIN_BUFFER = [];
         function updateBufferDisplay() { $('#bufferSize').textContent = NN_TRAIN_BUFFER.length; }
         function addToBuffer(item) { NN_TRAIN_BUFFER.push(item); if (NN_TRAIN_BUFFER.length > 3000) NN_TRAIN_BUFFER.splice(0, NN_TRAIN_BUFFER.length - 3000); updateBufferDisplay(); }
-        async function trainOnBuffer() { if (!NN_READY || NN_TRAIN_BUFFER.length < 10) return null; const batch = NN_TRAIN_BUFFER.slice(-64); const xs = tf.tensor2d(batch.map(b => b.state)); const pY = tf.tensor2d(batch.map(b => b.policy)); const vY = tf.tensor2d(batch.map(b => [b.value])); const r = await NN.fit(xs, [pY, vY], { epochs: 1, verbose: 0 }); NN_GAMES += batch.length; $('#nnGames').textContent = NN_GAMES; const loss = r.history.loss[0]; $('#nnLoss').textContent = loss.toFixed(3); addLoss(loss); xs.dispose(); pY.dispose(); vY.dispose(); return loss; }
+        async function trainOnBuffer() {
+            if (!NN_READY || NN_TRAIN_BUFFER.length < 10) return null;
+
+            // const batch = NN_TRAIN_BUFFER.slice(-64);
+
+            const batch = [];
+            for (let i = 0; i < 64; i++) {
+                const idx = Math.floor(Math.random() * NN_TRAIN_BUFFER.length);
+                batch.push(NN_TRAIN_BUFFER[idx]);
+            }
+
+            const xs = tf.tensor2d(batch.map(b => b.state)); const pY = tf.tensor2d(batch.map(b => b.policy)); const vY = tf.tensor2d(batch.map(b => [b.value])); const r = await NN.fit(xs, [pY, vY], { epochs: 1, verbose: 0 }); NN_GAMES += batch.length; $('#nnGames').textContent = NN_GAMES; const loss = r.history.loss[0]; $('#nnLoss').textContent = loss.toFixed(3); addLoss(loss); xs.dispose(); pY.dispose(); vY.dispose(); return loss;
+        }
         function addTrainLog(msg) { const log = $('#trainLog'); const t = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); const d = document.createElement('div'); d.textContent = `[${t}] ${msg}`; log.insertBefore(d, log.firstChild); while (log.children.length > 25) log.removeChild(log.lastChild); }
 
         /* ===== Encoding ===== */
