@@ -203,53 +203,6 @@
                 border-color: #ffd873
             }
 
-        #score {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%,-50%);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(6,24,15,.6);
-            border: 1px solid rgba(240,215,140,.4);
-            border-radius: 999px;
-            padding: 4px 14px;
-            font: 800 13px Rubik;
-            color: #f0dfae;
-            pointer-events: auto;
-            cursor: pointer;
-            white-space: nowrap
-        }
-
-            #score b {
-                font-size: 15px;
-                color: #ffd873;
-                min-width: 12px;
-                text-align: center
-            }
-
-            #score .sc-l {
-                font: 600 10px Rubik;
-                letter-spacing: .06em;
-                color: #bfe0c8;
-                text-transform: uppercase
-            }
-
-            #score .sep {
-                color: #bfe0c8
-            }
-
-            #score.flash {
-                animation: scoreFlash .6s
-            }
-
-        @keyframes scoreFlash {
-            30% {
-                transform: translate(-50%,-50%) scale(1.3)
-            }
-        }
-
         #board {
             position: fixed;
             inset: 0;
@@ -810,30 +763,6 @@
             color: #232735
         }
 
-        #roundInfo {
-            position: fixed;
-            bottom: 8px;
-            left: 8px;
-            z-index: 55;
-            display: flex;
-            gap: 8px;
-            pointer-events: none
-        }
-
-        .info-chip {
-            background: rgba(6,24,15,.7);
-            border: 1px solid rgba(240,215,140,.3);
-            border-radius: 8px;
-            padding: 4px 10px;
-            font: 600 11px Rubik;
-            color: #bfe0c8
-        }
-
-            .info-chip b {
-                color: #ffd873;
-                font-size: 13px
-            }
-
         .cf {
             position: absolute;
             top: -44px;
@@ -1110,7 +1039,7 @@
     <div id="felt"></div><div id="sheen"></div><div id="frame"></div>
     <div id="glowTop" class="sideglow"></div><div id="glowBot" class="sideglow"></div>
     <div id="board"><div id="cards"></div><div id="deckStack"><span id="deckCount">36</span></div><div id="trumpTag" class="chip">Козырь <b id="trumpSym">♠</b></div><div id="bitaWrap"><span id="bitaBadge">0</span><span class="pileLbl">Бита</span></div></div>
-    <div id="topbar"><div id="logo"><span class="s1">♥</span><span class="s2">♠</span><span class="txt"> ПОДКИДНОЙ ДУРАК · MCTS+NN</span></div><div id="score"><span class="sc-l">Вы</span><b id="scoreH">0</b><span class="sep">:</span><b id="scoreA">0</b><span class="sc-l">ИИ</span></div><div id="tools"><button class="tbtn" id="menuBtn" title="Панель обучения">🧠</button><button class="tbtn" id="sndBtn">♪</button><button class="tbtn" id="helpBtn">?</button><button class="tbtn" id="newBtn">⟳</button></div></div>
+    <div id="topbar"><div id="logo"><span class="s1">♥</span><span class="s2">♠</span><span class="txt"> ПОДКИДНОЙ ДУРАК · MCTS+NN</span></div><div id="tools"><button class="tbtn" id="menuBtn" title="Панель обучения">🧠</button><button class="tbtn" id="sndBtn">♪</button><button class="tbtn" id="helpBtn">?</button><button class="tbtn" id="newBtn">⟳</button></div></div>
     <div id="nnPanel" class="hidden">
         <h3>🧠 MCTS + Нейросеть</h3>
         <div class="nn-row"><small>Статус</small><b id="nnStatus">загрузка...</b></div>
@@ -1160,7 +1089,6 @@
         </div>
     </div>
     <div id="toast"></div>
-    <div id="roundInfo"><div class="info-chip">Карты: Вы <b id="cardsH">0</b> : <b id="cardsA">0</b> ИИ</div><div class="info-chip">Бита: <b id="bitaCount">0</b></div></div>
     <div id="start" class="ov show">
         <div class="ovbox">
             <div class="fan"><div class="mcard red"><b>Т</b><i>♥</i></div><div class="mcard blk"><b>К</b><i>♠</i></div><div class="mcard red"><b>Д</b><i>♦</i></div></div>
@@ -1297,9 +1225,9 @@
         function handLayout(side) { if (!G) return; const h = G[side].hand, n = h.length; if (!n) return; const base = side === 'human' ? M.h - M.ch - 12 : M.hdr + 10; const maxW = M.w * .96 - M.cw; const sp = n > 1 ? Math.min(M.cw * (side === 'human' ? .7 : .55), maxW / (n - 1)) : 0; const total = sp * (n - 1) + M.cw, x0 = (M.w - total) / 2; const faceUp = SPECTATING ? true : (side === 'human'); h.forEach((c, i) => { const t = n > 1 ? i / (n - 1) - .5 : 0; placeCard(c, x0 + i * sp, side === 'human' ? base - (1 - Math.abs(t * 2)) * 6 : base + (1 - Math.abs(t * 2)) * 5, t * Math.min(16, 3 + n * 1.8) * (side === 'human' ? 1 : -1), faceUp, 30 + i); c.el.classList.toggle('mine', side === 'human' && !G.over && !SPECTATING); }); }
         function layoutTable() { if (!G || !G.table.length) return; const cx = tableCX(), cy = tableCY(); const n = G.table.length; const sp = M.cw * .85; const x0 = cx - ((sp * (n - 1) + M.cw) / 2 - M.cw / 2); G.table.forEach((p, i) => { placeCard(p.attack, x0 + i * sp, cy - 10, i % 2 ? -3 : 3, true, 20 + i * 2); if (p.defense) placeCard(p.defense, x0 + i * sp, cy + M.ch * .35, i % 2 ? 3 : -3, true, 21 + i * 2); }); }
         function layoutDeckUI() { if (!G) return; $('#deckStack').style.display = G.deck.length > 1 ? 'block' : 'none'; $('#deckCount').textContent = G.deck.length > 1 ? G.deck.length : 0; }
-        function layoutBitaUI() { if (!G) return; $('#bitaBadge').style.display = G.bita.length ? 'flex' : 'none'; $('#bitaBadge').textContent = G.bita.length; $('#bitaCount').textContent = G.bita.length; }
+        function layoutBitaUI() { if (!G) return; $('#bitaBadge').style.display = G.bita.length ? 'flex' : 'none'; $('#bitaBadge').textContent = G.bita.length; }
         function placeChips() { const dp = deckPos(); $('#deckStack').style.transform = `translate(${dp.x}px,${dp.y}px)`; $('#trumpTag').style.transform = `translate(${dp.x}px,${dp.y + M.ch + 16}px)`; const bp = bitaPos(); $('#bitaWrap').style.transform = `translate(${bp.x}px,${bp.y}px)`; }
-        function layoutAll() { if (!G) return; handLayout('human'); handLayout('ai'); layoutTable(); layoutDeckUI(); layoutBitaUI(); placeChips(); $('#console').style.bottom = (M.ch + 28) + 'px'; $('#cardsH').textContent = G.human.hand.length; $('#cardsA').textContent = G.ai.hand.length; }
+        function layoutAll() { if (!G) return; handLayout('human'); handLayout('ai'); layoutTable(); layoutDeckUI(); layoutBitaUI(); placeChips(); $('#console').style.bottom = (M.ch + 28) + 'px'; }
 
         /* ===== Game State ===== */
         let G = null, AI_T = null, muted = false, toastT = null;
@@ -1309,7 +1237,7 @@
         let MATCH = { h: 0, a: 0 }; try { const s = JSON.parse(localStorage.getItem('durakMctsMatch')); if (s) MATCH = s; } catch (e) { }
         function saveMatch() { try { localStorage.setItem('durakMctsMatch', JSON.stringify(MATCH)); } catch (e) { } }
         function updMatch() { $('#matchH').textContent = MATCH.h; $('#matchA').textContent = MATCH.a; saveMatch(); }
-        function updScore() { $('#scoreH').textContent = SCORE.h; $('#scoreA').textContent = SCORE.a; saveScore(); }
+        function updScore() { saveScore(); }
 
         /* ===== Audio ===== */
         let AC = null;
@@ -1777,7 +1705,6 @@
             });
             document.body.classList.toggle('humanAtk', !G.over && G.phase !== 'deal' && G.attacker === 'human');
             document.body.classList.toggle('aiAtk', !G.over && G.phase !== 'deal' && G.attacker === 'ai');
-            $('#cardsH').textContent = G.human.hand.length; $('#cardsA').textContent = G.ai.hand.length;
             if (!G.busy) layoutAll();
         }
         function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.remove('in'); void e.offsetWidth; e.classList.add('in'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('in'), 2000); }
@@ -1805,7 +1732,6 @@
         $('#takeBtn').onclick = () => humanTake();
         $('#doneBtn').onclick = () => humanDone();
         $('#geNewBtn').onclick = () => { $('#gameEnd').classList.remove('show'); newGame(); };
-        $('#score').onclick = () => { if (confirm('Сбросить счёт?')) { SCORE = { h: 0, a: 0 }; updScore(); } };
         $('#resetMatchBtn').onclick = () => { MATCH = { h: 0, a: 0 }; updMatch(); };
         $('#contTrainBtn').onclick = () => continuousTrainLoop();
         $('#spectateBtn').onclick = () => { if (SPECTATING) stopSpectate(); else startSpectate(); };
